@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "src/app/api/inngest/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/scan/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/resurrect/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/jobs/[jobId]/chat/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/jobs/[jobId]/generate-image/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
