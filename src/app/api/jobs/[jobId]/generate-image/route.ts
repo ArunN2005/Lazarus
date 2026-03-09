@@ -7,7 +7,6 @@ import {
 import { getAuthUserId } from '@/lib/dev-auth'
 import { getJob } from '@/lib/dynamodb'
 import { uploadGeneratedImage } from '@/lib/s3'
-import { env } from '@/lib/env'
 import crypto from 'crypto'
 
 const schema = z.object({
@@ -37,7 +36,7 @@ export async function POST(
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const client = new BedrockRuntimeClient({ region: env.AWS_REGION })
+  const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
   let response
   try {

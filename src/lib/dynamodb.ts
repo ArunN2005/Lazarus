@@ -9,7 +9,7 @@ import {
 import { env } from '@/lib/env'
 import type { Job, ChatMessage, FileRecord } from '@/types'
 
-const client = new DynamoDBClient({ region: env.AWS_REGION })
+const client = new DynamoDBClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
 const docClient = DynamoDBDocumentClient.from(client)
 
 const TABLE = env.DYNAMODB_TABLE_NAME

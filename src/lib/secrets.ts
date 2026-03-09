@@ -7,7 +7,7 @@ import {
 } from '@aws-sdk/client-secrets-manager'
 import { env } from '@/lib/env'
 
-const client = new SecretsManagerClient({ region: env.AWS_REGION })
+const client = new SecretsManagerClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
 function secretName(jobId: string): string {
   return `${env.SECRETS_MANAGER_PREFIX}/jobs/${jobId}/env`

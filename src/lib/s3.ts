@@ -7,7 +7,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from '@/lib/env'
 
-const s3 = new S3Client({ region: env.AWS_REGION })
+const s3 = new S3Client({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
 export async function uploadRepoFile(
   jobId: string,

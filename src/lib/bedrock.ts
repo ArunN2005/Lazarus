@@ -5,7 +5,7 @@ import {
 import { env } from '@/lib/env'
 import { PRICING, type BedrockModel } from '@/types'
 
-const bedrockClient = new BedrockRuntimeClient({ region: env.AWS_REGION })
+const bedrockClient = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? 'us-east-1' })
 
 interface StreamOptions {
   model: 'sonnet' | 'haiku'
