@@ -5,10 +5,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
   CLERK_SECRET_KEY: z.string().min(1),
 
-  // AWS
-  AWS_REGION: z.string().min(1),
-  AWS_ACCESS_KEY_ID: z.string().min(1),
-  AWS_SECRET_ACCESS_KEY: z.string().min(1),
+  // AWS — credentials and region are provided automatically by the Amplify compute role at runtime
 
   // Bedrock
   BEDROCK_MODEL_SONNET: z.string().min(1),
