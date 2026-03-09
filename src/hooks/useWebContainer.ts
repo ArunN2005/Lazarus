@@ -448,23 +448,34 @@ export function useWebContainer() {
     if (!wc) return
 
     try {
-      await wc.fs.mkdir('public', { recursive: true })
-      await wc.fs.writeFile('public/__lazarus_devtools.js', DEVTOOLS_SCRIPT)
+      // Determine where the frontend app root is so we write into the right public/ dir
+      const frontendRoot = findFrontendRoot(completedFiles)
+      const publicDir = frontendRoot === '.' ? 'public' : `${frontendRoot}/public`
+      // index.html candidates — prefer the app-root one first
+      const indexCandidates = frontendRoot === '.'
+        ? ['index.html']
+        : [`${frontendRoot}/index.html`, 'index.html']
 
-      // Inject script tag into index.html before </body>
-      const candidates = ['index.html', 'frontend/index.html']
-      for (const p of candidates) {
-        if (completedFiles.has(p)) {
-          const html = completedFiles.get(p)!
-          if (!html.includes('__lazarus_devtools.js')) {
-            const patched = html.replace(
-              '</body>',
-              '  <script src="/__lazarus_devtools.js"></script>\n</body>'
-            )
-            await wc.fs.writeFile(p, patched)
-          }
-          break
+      await wc.fs.mkdir(publicDir, { recursive: true })
+      await wc.fs.writeFile(`${publicDir}/__lazarus_devtools.js`, DEVTOOLS_SCRIPT)
+
+      for (const indexPath of indexCandidates) {
+        // Read from WebContainer filesystem first (it was already written by the SSE handler)
+        let html: string | null = null
+        try {
+          html = await wc.fs.readFile(indexPath, 'utf-8') as string
+        } catch {
+          html = completedFiles.get(indexPath) ?? null
         }
+        if (!html) continue
+        if (html.includes('__lazarus_devtools.js')) break // already injected
+
+        const patched = html.replace(
+          '</body>',
+          '  <script src="/__lazarus_devtools.js"></script>\n</body>'
+        )
+        await wc.fs.writeFile(indexPath, patched)
+        break
       }
     } catch {
       // Non-fatal — visual editing just won't be available
