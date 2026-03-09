@@ -34,7 +34,7 @@ export function PreviewPanel() {
   const previewRefreshKey = useWorkspaceStore((s) => s.previewRefreshKey)
   const refreshPreview = useWorkspaceStore((s) => s.refreshPreview)
 
-  const { writeFile } = useWebContainer()
+  const { writeFile, writeOverrideCSS } = useWebContainer()
 
   const editModeRef = useRef(false)
 
@@ -77,16 +77,36 @@ export function PreviewPanel() {
     [generatedFiles, setFileComplete, writeFile]
   )
 
+  // Persist drag positions by accumulating into a CSS override file
+  const dragOverridesRef = useRef<Map<string, string>>(new Map())
+
+  const applyDragWithCSS = useCallback(
+    (selector: string, transform: string) => {
+      dragOverridesRef.current.set(selector, transform)
+      const css = Array.from(dragOverridesRef.current.entries())
+        .map(([sel, tr]) => `${sel} { transform: ${tr} !important; }`)
+        .join('\n')
+      writeOverrideCSS(css)
+    },
+    [writeOverrideCSS]
+  )
+
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      if (!event.data || event.data.type !== 'lazarus:text-edit') return
-      const { oldText, newText } = event.data as { oldText: string; newText: string }
-      if (!oldText || !newText || oldText === newText) return
-      applyTextEdit(oldText, newText)
+      if (!event.data) return
+      if (event.data.type === 'lazarus:text-edit') {
+        const { oldText, newText } = event.data as { oldText: string; newText: string }
+        if (!oldText || !newText || oldText === newText) return
+        applyTextEdit(oldText, newText)
+      } else if (event.data.type === 'lazarus:drag-end') {
+        const { selector, transform } = event.data as { selector: string; transform: string }
+        if (!selector || !transform) return
+        applyDragWithCSS(selector, transform)
+      }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [applyTextEdit])
+  }, [applyTextEdit, applyDragWithCSS])
 
   const isLive = !!previewUrl
 

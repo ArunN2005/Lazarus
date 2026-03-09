@@ -92,11 +92,15 @@ const DEVTOOLS_SCRIPT = `(function(){
 'use strict';
 var editMode=false,dragEl=null,dragStartX=0,dragStartY=0,dragBaseX=0,dragBaseY=0;
 var TEXT={P:1,H1:1,H2:1,H3:1,H4:1,H5:1,H6:1,SPAN:1,BUTTON:1,A:1,LI:1,TD:1,TH:1,LABEL:1,STRONG:1,EM:1};
-var BLOCK={DIV:1,SECTION:1,ARTICLE:1,HEADER:1,FOOTER:1,MAIN:1,NAV:1,ASIDE:1,FIGURE:1,FORM:1,UL:1,OL:1};
+var BLOCK={DIV:1,SECTION:1,ARTICLE:1,HEADER:1,FOOTER:1,MAIN:1,NAV:1,ASIDE:1,FIGURE:1,FORM:1,UL:1,OL:1,BUTTON:1,A:1};
 var hl=document.createElement('div');hl.id='__lz_hl';
 hl.style.cssText='position:fixed;pointer-events:none;z-index:2147483646;border:2px solid #6366f1;border-radius:3px;opacity:0;transition:opacity .12s;box-shadow:0 0 0 3px rgba(99,102,241,.12)';
 var tip=document.createElement('div');
 tip.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;background:#4f46e5;color:#fff;font-size:10px;font-family:system-ui;padding:3px 8px;border-radius:4px;opacity:0;transition:opacity .12s;white-space:nowrap;box-shadow:0 2px 8px rgba(79,70,229,.4)';
+var overSty=document.createElement('style');overSty.id='__lz_os';
+var overrides={};
+function getSel(el){var parts=[];var t=el;while(t&&t.tagName&&t!==document.body){if(t.id){parts.unshift('#'+t.id);break;}var s=t.tagName.toLowerCase();if(t.parentElement){var idx=Array.prototype.indexOf.call(t.parentElement.children,t);if(idx>0)s+=':nth-child('+(idx+1)+')';}parts.unshift(s);t=t.parentElement;}return parts.join(' > ');}
+function applyOverrides(){var css='';for(var sel in overrides)css+=sel+'{transform:'+overrides[sel]+' !important;}\n';overSty.textContent=css;}
 function posHl(el){var r=el.getBoundingClientRect();hl.style.top=r.top+'px';hl.style.left=r.left+'px';hl.style.width=r.width+'px';hl.style.height=r.height+'px';hl.style.opacity='1';}
 function getTrans(el){var t=window.getComputedStyle(el).transform;if(!t||t==='none')return[0,0];var m=t.match(/matrix\\([\\d., -]+\\)/);if(m){var v=m[0].match(/[\\d.-]+/g);if(v&&v.length>=6)return[parseFloat(v[4]),parseFloat(v[5])];}return[0,0];}
 function setEdit(on){editMode=on;if(!on){hl.style.opacity='0';tip.style.opacity='0';dragEl=null;}}
@@ -106,14 +110,18 @@ document.addEventListener('mouseout',function(e){if(!editMode)return;hl.style.op
 document.addEventListener('click',function(e){if(!editMode||dragEl)return;var el=e.target;if(!TEXT[el.tagName]||el.childElementCount>0)return;var orig=el.textContent;e.preventDefault();e.stopPropagation();el.contentEditable='true';el.style.outline='2px solid #6366f1';el.style.outlineOffset='2px';el.style.borderRadius='2px';el.focus();var done=function(){el.contentEditable='false';el.style.outline='';el.style.outlineOffset='';el.style.borderRadius='';var nw=el.textContent;if(nw!==orig)window.parent.postMessage({type:'lazarus:text-edit',oldText:orig,newText:nw,tagName:el.tagName},'*');el.removeEventListener('blur',done);el.removeEventListener('keydown',keys);};var keys=function(k){if(k.key==='Escape'){el.textContent=orig;done();}if(k.key==='Enter'&&el.tagName!=='DIV'&&el.tagName!=='P'){k.preventDefault();done();}};el.addEventListener('blur',done);el.addEventListener('keydown',keys);},true);
 document.addEventListener('mousedown',function(e){if(!editMode||e.button!==0)return;if(document.activeElement&&document.activeElement.isContentEditable)return;var el=e.target;if(!el||el===document.body)return;var t=el;while(t&&t!==document.body){if(BLOCK[t.tagName])break;t=t.parentElement;}if(!t||t===document.body)return;var tr=getTrans(t);dragBaseX=tr[0];dragBaseY=tr[1];dragStartX=e.clientX;dragStartY=e.clientY;dragEl=t;e.preventDefault();},true);
 document.addEventListener('mousemove',function(e){if(!editMode||!dragEl)return;var dx=e.clientX-dragStartX,dy=e.clientY-dragStartY;dragEl.style.transform='translate('+(dragBaseX+dx)+'px,'+(dragBaseY+dy)+'px)';posHl(dragEl);},true);
-document.addEventListener('mouseup',function(){dragEl=null;},true);
-function mount(){if(document.getElementById('__lz_hl'))return;document.body.appendChild(hl);document.body.appendChild(tip);}
+document.addEventListener('mouseup',function(){
+  if(editMode&&dragEl){var tr=getTrans(dragEl);if(Math.abs(tr[0]-dragBaseX)>2||Math.abs(tr[1]-dragBaseY)>2){var sel=getSel(dragEl);var xform='translate('+tr[0]+'px,'+tr[1]+'px)';overrides[sel]=xform;applyOverrides();window.parent.postMessage({type:'lazarus:drag-end',selector:sel,transform:xform},'*');}}
+  dragEl=null;
+},true);
+function mount(){if(document.getElementById('__lz_hl'))return;document.body.appendChild(hl);document.body.appendChild(tip);document.head.appendChild(overSty);}
 if(document.body)mount();else document.addEventListener('DOMContentLoaded',mount);
 })();`
 
 let bootPromise: Promise<WebContainer> | null = null
 let bootedInstance: WebContainer | null = null
 let installRunning = false
+let lastFrontendRoot = '.'
 
 // Promise that resolves when boot is fully complete
 let bootReadyResolve: () => void
@@ -448,19 +456,19 @@ export function useWebContainer() {
     if (!wc) return
 
     try {
-      // Determine where the frontend app root is so we write into the right public/ dir
       const frontendRoot = findFrontendRoot(completedFiles)
+      lastFrontendRoot = frontendRoot
       const publicDir = frontendRoot === '.' ? 'public' : `${frontendRoot}/public`
-      // index.html candidates — prefer the app-root one first
       const indexCandidates = frontendRoot === '.'
         ? ['index.html']
         : [`${frontendRoot}/index.html`, 'index.html']
 
       await wc.fs.mkdir(publicDir, { recursive: true })
       await wc.fs.writeFile(`${publicDir}/__lazarus_devtools.js`, DEVTOOLS_SCRIPT)
+      // Empty overrides file — filled by drag events
+      await wc.fs.writeFile(`${publicDir}/__lazarus_overrides.css`, '')
 
       for (const indexPath of indexCandidates) {
-        // Read from WebContainer filesystem first (it was already written by the SSE handler)
         let html: string | null = null
         try {
           html = await wc.fs.readFile(indexPath, 'utf-8') as string
@@ -468,11 +476,11 @@ export function useWebContainer() {
           html = completedFiles.get(indexPath) ?? null
         }
         if (!html) continue
-        if (html.includes('__lazarus_devtools.js')) break // already injected
+        if (html.includes('__lazarus_devtools.js')) break
 
         const patched = html.replace(
           '</body>',
-          '  <script src="/__lazarus_devtools.js"></script>\n</body>'
+          '  <link rel="stylesheet" href="/__lazarus_overrides.css">\n  <script src="/__lazarus_devtools.js"></script>\n</body>'
         )
         await wc.fs.writeFile(indexPath, patched)
         break
@@ -482,10 +490,20 @@ export function useWebContainer() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const writeOverrideCSS = useCallback(async (css: string) => {
+    const wc = wcRef.current
+    if (!wc) return
+    const publicDir = lastFrontendRoot === '.' ? 'public' : `${lastFrontendRoot}/public`
+    try {
+      await wc.fs.writeFile(`${publicDir}/__lazarus_overrides.css`, css)
+    } catch { /* non-fatal */ }
+  }, [])
+
   return {
     writeFile,
     runInstall,
     runBackendThenFrontend,
     injectDevtools,
+    writeOverrideCSS,
   }
 }
