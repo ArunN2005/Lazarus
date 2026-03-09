@@ -60,6 +60,41 @@ export async function POST(
   const fileList = Array.from(generatedFiles.keys()).join('\n')
   console.log(`[chat] File list (${generatedFiles.size} files):\n${fileList}`)
 
+  // Step 1: Classify intent — question vs code change
+  const classifyResult = await invokeBedrockSync(
+    'haiku',
+    'You classify user messages. Output only one word: "question" or "edit".',
+    `The user sent this message to an AI coding assistant: "${parsed.data.message}"\n\nIs this a question/inquiry, or a request to edit/change/add/fix code?\nOutput only: "question" or "edit"`,
+    10
+  )
+  const isQuestion = classifyResult.trim().toLowerCase().includes('question')
+  console.log(`[chat] Intent: ${isQuestion ? 'question' : 'edit'}`)
+
+  // If it's a question, answer it using the codebase context — no file modifications
+  if (isQuestion) {
+    const codeContext = Array.from(generatedFiles.entries())
+      .slice(0, 20)
+      .map(([path, content]) => `<file path="${path}">\n${content.slice(0, 800)}\n</file>`)
+      .join('\n\n')
+
+    const answer = await invokeBedrockSync(
+      'sonnet',
+      'You are a helpful assistant that answers questions about a codebase. Be concise and clear.',
+      `Here is the codebase:\n\n${codeContext}\n\nUser question: ${parsed.data.message}`,
+      1024
+    )
+
+    const aiMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: answer.trim(),
+      timestamp: new Date().toISOString(),
+    }
+    await addChatMessage(params.jobId, aiMsg)
+    return NextResponse.json({ message: aiMsg })
+  }
+
+  // Step 2 (edit path): Identify which files need to change
   const identifyPrompt = `Given these files in a web application:
 ${fileList}
 

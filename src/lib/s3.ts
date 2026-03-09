@@ -94,6 +94,35 @@ export async function getAllRepoFiles(
   return files
 }
 
+export async function listGeneratedFiles(jobId: string): Promise<string[]> {
+  const prefix = `generated/${jobId}/`
+  const result = await s3.send(
+    new ListObjectsV2Command({
+      Bucket: env.S3_BUCKET_GENERATED,
+      Prefix: prefix,
+    })
+  )
+  return (result.Contents ?? [])
+    .map((obj) => obj.Key?.replace(prefix, '') ?? '')
+    .filter((p) => Boolean(p) && !p.startsWith('images/'))
+}
+
+export async function getAllGeneratedFiles(
+  jobId: string
+): Promise<Map<string, string>> {
+  const filePaths = await listGeneratedFiles(jobId)
+  const files = new Map<string, string>()
+
+  await Promise.all(
+    filePaths.map(async (filePath) => {
+      const content = await getGeneratedFile(jobId, filePath)
+      files.set(filePath, content)
+    })
+  )
+
+  return files
+}
+
 export async function getPresignedUrl(
   bucket: string,
   key: string,

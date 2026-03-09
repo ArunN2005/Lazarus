@@ -100,7 +100,7 @@ tip.style.cssText='position:fixed;pointer-events:none;z-index:2147483647;backgro
 var overSty=document.createElement('style');overSty.id='__lz_os';
 var overrides={};
 function getSel(el){var parts=[];var t=el;while(t&&t.tagName&&t!==document.body){if(t.id){parts.unshift('#'+t.id);break;}var s=t.tagName.toLowerCase();if(t.parentElement){var idx=Array.prototype.indexOf.call(t.parentElement.children,t);if(idx>0)s+=':nth-child('+(idx+1)+')';}parts.unshift(s);t=t.parentElement;}return parts.join(' > ');}
-function applyOverrides(){var css='';for(var sel in overrides)css+=sel+'{transform:'+overrides[sel]+' !important;}\n';overSty.textContent=css;}
+function applyOverrides(){var css='';for(var sel in overrides)css+=sel+'{transform:'+overrides[sel]+' !important;}';overSty.textContent=css;}
 function posHl(el){var r=el.getBoundingClientRect();hl.style.top=r.top+'px';hl.style.left=r.left+'px';hl.style.width=r.width+'px';hl.style.height=r.height+'px';hl.style.opacity='1';}
 function getTrans(el){var t=window.getComputedStyle(el).transform;if(!t||t==='none')return[0,0];var m=t.match(/matrix\\([\\d., -]+\\)/);if(m){var v=m[0].match(/[\\d.-]+/g);if(v&&v.length>=6)return[parseFloat(v[4]),parseFloat(v[5])];}return[0,0];}
 function setEdit(on){editMode=on;if(!on){hl.style.opacity='0';tip.style.opacity='0';dragEl=null;}}
@@ -458,44 +458,112 @@ export function useWebContainer() {
     try {
       const frontendRoot = findFrontendRoot(completedFiles)
       lastFrontendRoot = frontendRoot
-      const publicDir = frontendRoot === '.' ? 'public' : `${frontendRoot}/public`
-      const indexCandidates = frontendRoot === '.'
-        ? ['index.html']
-        : [`${frontendRoot}/index.html`, 'index.html']
+      store.addTerminalLog(`> Devtools: frontend root = "${frontendRoot}"`)
 
-      await wc.fs.mkdir(publicDir, { recursive: true })
-      await wc.fs.writeFile(`${publicDir}/__lazarus_devtools.js`, DEVTOOLS_SCRIPT)
-      // Empty overrides file — filled by drag events
-      await wc.fs.writeFile(`${publicDir}/__lazarus_overrides.css`, '')
+      const srcDir = frontendRoot === '.' ? 'src' : `${frontendRoot}/src`
+      await wc.fs.mkdir(srcDir, { recursive: true })
 
-      for (const indexPath of indexCandidates) {
-        let html: string | null = null
+      // Write devtools as a TS module with @ts-nocheck so Vite bundles it into the
+      // app bundle. Bundled code is never blocked by CSP — it's same-origin JavaScript.
+      // Serving as public/__lazarus_devtools.js fails because the app's CSP blocks
+      // external scripts loaded via <script src>.
+      await wc.fs.writeFile(
+        `${srcDir}/__lazarus_devtools.ts`,
+        `// @ts-nocheck\n/* eslint-disable */\n${DEVTOOLS_SCRIPT}\n`
+      )
+
+      // CSS file for drag overrides — imported via Vite's module graph so HMR applies
+      // and it survives full reloads (unlike public/ files which can be cached stale)
+      await wc.fs.writeFile(`${srcDir}/__lazarus.css`, '/* lazarus-drag-overrides */\n')
+
+      // Inject both imports at the top of the main entry
+      for (const entry of ['main.tsx', 'main.ts', 'index.tsx', 'index.ts'].map((f) => `${srcDir}/${f}`)) {
         try {
-          html = await wc.fs.readFile(indexPath, 'utf-8') as string
-        } catch {
-          html = completedFiles.get(indexPath) ?? null
-        }
-        if (!html) continue
-        if (html.includes('__lazarus_devtools.js')) break
+          const content = await wc.fs.readFile(entry, 'utf-8') as string
+          let updated = content
+          if (!content.includes('__lazarus_devtools')) {
+            updated = `import './__lazarus_devtools'\n` + updated
+          }
+          if (!content.includes('__lazarus.css')) {
+            updated = `import './__lazarus.css'\n` + updated
+          }
+          if (updated !== content) {
+            await wc.fs.writeFile(entry, updated)
+            store.addTerminalLog(`> Devtools: imports added to ${entry}`)
+          }
+          break
+        } catch { continue }
+      }
 
-        const patched = html.replace(
-          '</body>',
-          '  <link rel="stylesheet" href="/__lazarus_overrides.css">\n  <script src="/__lazarus_devtools.js"></script>\n</body>'
-        )
-        await wc.fs.writeFile(indexPath, patched)
+      // Strip CSP meta tags — CSP blocks WebContainer's own runtime script
+      // (.webcontainer@runtime.js) which breaks the preview entirely
+      const primaryIndex = frontendRoot === '.' ? 'index.html' : `${frontendRoot}/index.html`
+      const allIndexPaths = Array.from(completedFiles.keys()).filter((p) => p.endsWith('index.html'))
+      for (const indexPath of [primaryIndex, ...allIndexPaths.filter((p) => p !== primaryIndex)]) {
+        let html: string | null = null
+        try { html = await wc.fs.readFile(indexPath, 'utf-8') as string }
+        catch { html = completedFiles.get(indexPath) ?? null }
+        if (!html) continue
+        if (/<meta[^>]+Content-Security-Policy/i.test(html)) {
+          await wc.fs.writeFile(indexPath, html.replace(/<meta[^>]+Content-Security-Policy[^>]*>\s*/gi, ''))
+          store.addTerminalLog(`> Devtools: removed CSP meta from ${indexPath}`)
+        }
         break
       }
-    } catch {
-      // Non-fatal — visual editing just won't be available
+
+      // Patch vite.config to add CORP/COEP server headers
+      const CORP_HEADERS_SNIPPET = `\n  server: {\n    headers: {\n      'Cross-Origin-Resource-Policy': 'cross-origin',\n      'Cross-Origin-Embedder-Policy': 'require-corp',\n    },\n  },`
+      for (const vcPath of [
+        frontendRoot === '.' ? 'vite.config.ts' : `${frontendRoot}/vite.config.ts`,
+        frontendRoot === '.' ? 'vite.config.js' : `${frontendRoot}/vite.config.js`,
+      ]) {
+        try {
+          const vc = await wc.fs.readFile(vcPath, 'utf-8') as string
+          if (!vc.includes('Cross-Origin-Resource-Policy')) {
+            let patched = vc
+            if (/defineConfig\(\{/.test(vc)) {
+              patched = vc.replace(/defineConfig\(\{/, `defineConfig({${CORP_HEADERS_SNIPPET}`)
+            } else if (/export default \{/.test(vc)) {
+              patched = vc.replace(/export default \{/, `export default {${CORP_HEADERS_SNIPPET}`)
+            }
+            if (patched !== vc) {
+              await wc.fs.writeFile(vcPath, patched)
+              store.addTerminalLog(`> Devtools: CORP headers added to ${vcPath}`)
+            }
+          }
+          break
+        } catch { continue }
+      }
+
+      // Patch Express entry to add CORP/COEP middleware
+      const CORP_MW = `\napp.use((_req, res, next) => {\n  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')\n  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp')\n  next()\n})\n`
+      for (const be of ['backend/src/index.ts', 'server/src/index.ts', 'api/src/index.ts',
+                        'backend/index.ts', 'server/index.ts', 'backend/src/app.ts']) {
+        try {
+          const beContent = await wc.fs.readFile(be, 'utf-8') as string
+          if (beContent.includes('express') && !beContent.includes('Cross-Origin-Resource-Policy')) {
+            const patched = beContent.replace(/(app\.use\([^)]+\)\s*\n)/, `$1${CORP_MW}`)
+            if (patched !== beContent) {
+              await wc.fs.writeFile(be, patched)
+              store.addTerminalLog(`> Devtools: CORP middleware added to ${be}`)
+            }
+          }
+          break
+        } catch { continue }
+      }
+    } catch (err) {
+      store.addTerminalLog(`> Devtools injection error: ${err}`)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const writeOverrideCSS = useCallback(async (css: string) => {
     const wc = wcRef.current
     if (!wc) return
-    const publicDir = lastFrontendRoot === '.' ? 'public' : `${lastFrontendRoot}/public`
+    // Write to src/__lazarus.css — in Vite's module graph, so HMR applies immediately
+    // and positions survive preview refreshes without browser caching issues
+    const srcDir = lastFrontendRoot === '.' ? 'src' : `${lastFrontendRoot}/src`
     try {
-      await wc.fs.writeFile(`${publicDir}/__lazarus_overrides.css`, css)
+      await wc.fs.writeFile(`${srcDir}/__lazarus.css`, `/* lazarus-drag-overrides */\n${css}\n`)
     } catch { /* non-fatal */ }
   }, [])
 

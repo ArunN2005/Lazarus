@@ -36,6 +36,7 @@ export interface Job {
   completedAt: string | null
   legacyScore: number       // 0–100: how outdated the repo is (higher = more work)
   weaknesses: string[]      // human-readable list of detected issues
+  repoDescription: string   // one-sentence summary of what the app does
 }
 
 export interface FileRecord {

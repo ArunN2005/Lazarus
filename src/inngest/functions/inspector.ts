@@ -464,6 +464,7 @@ export const inspector = inngest.createFunction(
         completedAt: null,
         legacyScore: 0,
         weaknesses: [],
+        repoDescription: '',
       })
     })
 
@@ -542,6 +543,28 @@ Output ONLY a JSON array of question strings, nothing else. Example:
       return analyzeRepo(techStack, filesMap, envVars)
     })
 
+    const repoDescription = await step.run('describe-repo', async () => {
+      const readme = filesMap.get('README.md') ?? filesMap.get('readme.md') ?? ''
+      const fileList = Array.from(filesMap.keys()).slice(0, 40).join('\n')
+
+      const prompt = `Repository: ${repoOwner}/${repoName}
+
+Files:
+${fileList}
+
+${readme ? `README (first 1500 chars):\n${readme.slice(0, 1500)}` : 'No README.'}
+
+Write a single sentence (max 25 words) describing what this web application does. Start with "This is a ..." or "A ...". Be specific — mention the domain (e.g. railway booking, e-commerce, task manager). Output ONLY the sentence, no quotes, no punctuation beyond a period.`
+
+      const result = await invokeBedrockSync(
+        'haiku',
+        'You describe software repositories in one concise sentence.',
+        prompt,
+        80,
+      )
+      return result.trim().replace(/^["']|["']$/g, '')
+    })
+
     await step.run('store-files', async () => {
       await Promise.all(
         Array.from(filesMap.entries()).map(([filePath, content]) =>
@@ -558,6 +581,7 @@ Output ONLY a JSON array of question strings, nothing else. Example:
         clarificationQuestions: questions,
         legacyScore,
         weaknesses,
+        repoDescription,
       })
 
       return { fileTree }

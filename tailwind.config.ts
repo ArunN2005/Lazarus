@@ -15,6 +15,7 @@ const config: Config = {
           panel: 'var(--bg-panel)',
           elevated: 'var(--bg-elevated)',
           hover: 'var(--bg-hover)',
+          subtle: 'var(--bg-subtle)',
         },
         border: {
           subtle: 'var(--border-subtle)',
@@ -24,6 +25,7 @@ const config: Config = {
         text: {
           primary: 'var(--text-primary)',
           secondary: 'var(--text-secondary)',
+          tertiary: 'var(--text-tertiary)',
           muted: 'var(--text-muted)',
           disabled: 'var(--text-disabled)',
         },
@@ -63,11 +65,12 @@ const config: Config = {
       animation: {
         'fade-in': 'fadeIn var(--duration-normal) var(--ease-out)',
         'slide-up': 'slideUp var(--duration-normal) var(--ease-out)',
-        shimmer: 'shimmer 1.5s ease-in-out infinite',
-        'pulse-glow': 'pulseGlow 2s ease-in-out infinite',
+        shimmer: 'shimmer 2s ease-in-out infinite',
+        'pulse-glow': 'pulseGlow 2.5s ease-in-out infinite',
         'typing-cursor': 'typingCursor 1s step-end infinite',
         'count-up': 'countUp var(--duration-fast) var(--ease-out)',
         'scan-line': 'scanLine 2s linear infinite',
+        'orb-float': 'orbFloat 8s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -84,7 +87,7 @@ const config: Config = {
         },
         pulseGlow: {
           '0%, 100%': { boxShadow: '0 0 0 0 var(--accent-glow)' },
-          '50%': { boxShadow: '0 0 20px 4px var(--accent-glow)' },
+          '50%': { boxShadow: '0 0 24px 4px var(--accent-glow)' },
         },
         typingCursor: {
           '0%, 100%': { opacity: '1' },
@@ -97,6 +100,10 @@ const config: Config = {
         scanLine: {
           from: { top: '0%' },
           to: { top: '100%' },
+        },
+        orbFloat: {
+          '0%, 100%': { transform: 'translateY(0px) scale(1)' },
+          '50%': { transform: 'translateY(-20px) scale(1.03)' },
         },
       },
       transitionDuration: {

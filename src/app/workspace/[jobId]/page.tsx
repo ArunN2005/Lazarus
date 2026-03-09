@@ -88,6 +88,7 @@ export default function WorkspacePage() {
         const job = data.job
 
         store.setStatus(job.status)
+        if (job.repoUrl) store.setRepoInfo(job.repoUrl, job.repoName ?? '')
         if (job.techStack) store.setTechStack(job.techStack)
         if (job.totalCostUSD) store.setTotalCostUSD(job.totalCostUSD)
         if (job.envVars?.length > 0) store.setDetectedEnvVars(job.envVars)
@@ -99,7 +100,7 @@ export default function WorkspacePage() {
         }
 
         if (typeof job.legacyScore === 'number' && job.legacyScore > 0) {
-          store.setRepoAnalysis(job.legacyScore, job.weaknesses ?? [])
+          store.setRepoAnalysis(job.legacyScore, job.weaknesses ?? [], job.repoDescription ?? '')
         }
 
         if (job.clarificationQuestions?.length > 0) {
@@ -107,6 +108,11 @@ export default function WorkspacePage() {
           if (job.status === 'clarifying') {
             store.setShowClarificationModal(true)
           }
+        }
+
+        // Auto-open repo analysis modal when scan completes
+        if (job.status === 'scanned' && store.status !== 'scanned') {
+          store.setShowMigrationPlanModal(true)
         }
 
         // Stop polling once past scanning

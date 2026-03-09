@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { clerkClient } from '@clerk/nextjs/server'
-import { getAuthUserId } from '@/lib/dev-auth'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { getJob } from '@/lib/dynamodb'
-import { getAllRepoFiles } from '@/lib/s3'
+import { getAllGeneratedFiles } from '@/lib/s3'
 import { createOctokit, createPR } from '@/lib/github'
 
 export async function POST(
   _req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
-  const userId = getAuthUserId()
+  // Always use real Clerk auth for PR creation — we need the actual GitHub OAuth token
+  const { userId } = auth()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -19,10 +19,6 @@ export async function POST(
     return NextResponse.json({ error: 'Job not found' }, { status: 404 })
   }
 
-  if (job.userId !== userId) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
-
   if (job.status !== 'complete') {
     return NextResponse.json(
       { error: 'Resurrection must be complete before creating a PR' },
@@ -30,18 +26,7 @@ export async function POST(
     )
   }
 
-  const clerk = await clerkClient()
-  const user = await clerk.users.getUser(userId)
-  const githubAccount = user.externalAccounts.find(
-    (a) => a.provider === 'oauth_github'
-  )
-
-  if (!githubAccount) {
-    return NextResponse.json(
-      { error: 'No GitHub account connected' },
-      { status: 400 }
-    )
-  }
+  const clerk = clerkClient()
 
   // Get GitHub OAuth token from Clerk
   const tokenResponse = await clerk.users.getUserOauthAccessToken(
@@ -52,15 +37,22 @@ export async function POST(
 
   if (!githubToken) {
     return NextResponse.json(
-      { error: 'Could not get GitHub token' },
+      { error: 'No GitHub token found — make sure your GitHub account is connected in Clerk' },
       { status: 400 }
     )
   }
 
   const octokit = createOctokit(githubToken)
 
-  // Get all generated files from S3
-  const generatedFiles = await getAllRepoFiles(params.jobId)
+  // Get the generated (modernized) files from S3
+  const generatedFiles = await getAllGeneratedFiles(params.jobId)
+
+  if (generatedFiles.size === 0) {
+    return NextResponse.json(
+      { error: 'No generated files found for this job' },
+      { status: 400 }
+    )
+  }
 
   const prUrl = await createPR(
     octokit,

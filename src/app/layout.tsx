@@ -32,10 +32,10 @@ export default function RootLayout({
       appearance={{
         baseTheme: dark,
         variables: {
-          colorPrimary: '#7c3aed',
-          colorBackground: '#161616',
-          colorInputBackground: '#0f0f0f',
-          colorText: '#f0f0f0',
+          colorPrimary: '#818cf8',
+          colorBackground: '#070e1e',
+          colorInputBackground: '#030712',
+          colorText: '#e8eeff',
         },
       }}
     >

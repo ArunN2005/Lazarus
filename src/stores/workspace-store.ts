@@ -36,7 +36,10 @@ interface WorkspaceStore {
   showMigrationPlanModal: boolean
   legacyScore: number
   weaknesses: string[]
+  repoDescription: string
   previewRefreshKey: number
+  repoUrl: string
+  repoName: string
 
   // Actions
   setJobId: (id: string) => void
@@ -64,7 +67,8 @@ interface WorkspaceStore {
   setShowBackendDialog: (show: boolean) => void
   setBackendInfo: (root: string, framework: string) => void
   setShowMigrationPlanModal: (show: boolean) => void
-  setRepoAnalysis: (score: number, weaknesses: string[]) => void
+  setRepoAnalysis: (score: number, weaknesses: string[], description: string) => void
+  setRepoInfo: (url: string, name: string) => void
   refreshPreview: () => void
   reset: () => void
 }
@@ -97,7 +101,10 @@ const initialState = {
   showMigrationPlanModal: false,
   legacyScore: 0,
   weaknesses: [] as string[],
+  repoDescription: '',
   previewRefreshKey: 0,
+  repoUrl: '',
+  repoName: '',
 }
 
 export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
@@ -196,7 +203,9 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setShowMigrationPlanModal: (show) => set({ showMigrationPlanModal: show }),
 
-  setRepoAnalysis: (score, weaknesses) => set({ legacyScore: score, weaknesses }),
+  setRepoAnalysis: (score, weaknesses, description) => set({ legacyScore: score, weaknesses, repoDescription: description }),
+
+  setRepoInfo: (repoUrl, repoName) => set({ repoUrl, repoName }),
 
   refreshPreview: () => set((state) => ({ previewRefreshKey: state.previewRefreshKey + 1 })),
 

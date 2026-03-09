@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowRight,
+  ArrowLeft,
   Loader2,
   Mic,
   MicOff,
@@ -11,8 +12,17 @@ import {
   CheckCircle2,
   AlertTriangle,
   Zap,
+  ExternalLink,
+  Code2,
+  Database,
+  Server,
+  Layers,
+  Package,
+  TestTube2,
+  X,
 } from 'lucide-react'
 import { useWorkspaceStore } from '@/stores/workspace-store'
+import type { TechStack } from '@/types'
 
 interface MigrationOption {
   id: string
@@ -86,6 +96,141 @@ const MIGRATION_OPTIONS: MigrationOption[] = [
   },
 ]
 
+const TECH_LABELS: { key: keyof TechStack; label: string; Icon: React.ElementType }[] = [
+  { key: 'frontend', label: 'Frontend', Icon: Layers },
+  { key: 'backend', label: 'Backend', Icon: Server },
+  { key: 'language', label: 'Language', Icon: Code2 },
+  { key: 'database', label: 'Database', Icon: Database },
+  { key: 'cssFramework', label: 'Styling', Icon: Layers },
+  { key: 'packageManager', label: 'Packages', Icon: Package },
+  { key: 'testFramework', label: 'Tests', Icon: TestTube2 },
+]
+
+function RepoOverview({
+  repoUrl,
+  repoName,
+  repoDescription,
+  techStack,
+  legacyScore,
+  weaknesses,
+  onNext,
+}: {
+  repoUrl: string
+  repoName: string
+  repoDescription: string
+  techStack: TechStack | null
+  legacyScore: number
+  weaknesses: string[]
+  onNext: () => void
+}) {
+  return (
+    <motion.div
+      key="step-0"
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {/* Header */}
+      <div className="mb-5">
+        <h2 className="text-xl font-semibold text-text-primary">Repository Analysis</h2>
+        <p className="text-sm text-text-secondary mt-1">
+          Here&apos;s what Lazarus found about your legacy codebase
+        </p>
+      </div>
+
+      {/* Repo identity */}
+      <div className="mb-5 p-4 rounded-xl border border-border-strong bg-bg-subtle flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary truncate">{repoName || 'Repository'}</p>
+          {repoUrl && (
+            <p className="text-xs text-text-tertiary truncate mt-0.5">{repoUrl}</p>
+          )}
+        </div>
+        {repoUrl && (
+          <a
+            href={repoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
+      </div>
+
+      {/* App description */}
+      {repoDescription && (
+        <div className="mb-5 p-3.5 rounded-xl border border-border-subtle bg-bg-subtle">
+          <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-1.5">
+            About this app
+          </p>
+          <p className="text-sm text-text-secondary leading-relaxed">{repoDescription}</p>
+        </div>
+      )}
+
+      {/* Tech stack grid */}
+      {techStack && (
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+            Detected Tech Stack
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {TECH_LABELS.map(({ key, label, Icon }) => {
+              const value = techStack[key]
+              if (!value || value === 'unknown') return null
+              return (
+                <div
+                  key={key}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-subtle border border-border-subtle"
+                >
+                  <Icon className="w-3.5 h-3.5 text-accent flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-text-tertiary uppercase tracking-wide leading-none mb-0.5">{label}</p>
+                    <p className="text-xs font-medium text-text-primary truncate capitalize">{value}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Score gauge */}
+      {legacyScore > 0 && <ScoreGauge score={legacyScore} />}
+
+      {/* Weaknesses */}
+      {weaknesses.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+            Issues detected
+          </p>
+          <div className="space-y-1.5">
+            {weaknesses.map((w) => (
+              <div
+                key={w}
+                className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <span className="text-xs text-text-secondary">{w}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onNext}
+        className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg py-3 text-sm transition-all duration-150"
+      >
+        Next: Modernisation Plan
+        <ArrowRight className="w-4 h-4" />
+      </button>
+    </motion.div>
+  )
+}
+
 function ScoreGauge({ score }: { score: number }) {
   const label =
     score >= 70
@@ -141,8 +286,24 @@ export function MigrationPlanModal({
   loading = false,
 }: MigrationPlanModalProps) {
   const show = useWorkspaceStore((s) => s.showMigrationPlanModal)
+  const setShow = useWorkspaceStore((s) => s.setShowMigrationPlanModal)
   const legacyScore = useWorkspaceStore((s) => s.legacyScore)
   const weaknesses = useWorkspaceStore((s) => s.weaknesses)
+  const repoDescription = useWorkspaceStore((s) => s.repoDescription)
+  const techStack = useWorkspaceStore((s) => s.techStack)
+  const repoUrl = useWorkspaceStore((s) => s.repoUrl)
+  const repoName = useWorkspaceStore((s) => s.repoName)
+
+  const handleClose = useCallback(() => {
+    if (!loading) setShow(false)
+  }, [loading, setShow])
+
+  const [step, setStep] = useState(0)
+
+  // Reset to overview step whenever modal is opened
+  useEffect(() => {
+    if (show) setStep(0)
+  }, [show])
 
   // Default: all options selected (mandatory always on, optional on by default)
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(
@@ -224,6 +385,7 @@ export function MigrationPlanModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/70 backdrop-blur-md"
+          onClick={handleClose}
         />
 
         <motion.div
@@ -233,182 +395,214 @@ export function MigrationPlanModal({
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="relative bg-bg-elevated border border-border-strong rounded-2xl p-8 max-w-[600px] w-full mx-4 shadow-[0_25px_60px_rgba(0,0,0,0.5)] max-h-[90vh] overflow-y-auto"
         >
-          {/* Header */}
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-text-primary">
-              Modernisation Plan
-            </h2>
-            <p className="text-sm text-text-secondary mt-1">
-              Review what Lazarus will change. Locked items are required for the
-              app to run in WebContainers.
-            </p>
-          </div>
-
-          {/* Score gauge — only shown once data is available */}
-          {legacyScore > 0 && <ScoreGauge score={legacyScore} />}
-
-          {/* Weaknesses detected */}
-          {weaknesses.length > 0 && (
-            <div className="mb-6">
-              <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-                Issues detected
-              </p>
-              <div className="space-y-1.5">
-                {weaknesses.map((w) => (
-                  <div
-                    key={w}
-                    className="flex items-start gap-2.5 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20"
-                  >
-                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs text-text-secondary">{w}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Mandatory */}
-          <div className="mb-5">
-            <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-              Required
-            </p>
-            <div className="space-y-2">
-              {mandatoryOptions.map((opt) => (
-                <div
-                  key={opt.id}
-                  className="flex items-start gap-3 p-3 rounded-lg bg-bg-subtle border border-border-subtle opacity-70"
-                >
-                  <div className="mt-0.5 flex-shrink-0 text-accent">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text-primary">
-                      {opt.label}
-                    </p>
-                    <p className="text-xs text-text-tertiary mt-0.5">
-                      {opt.description}
-                    </p>
-                  </div>
-                  <CheckCircle2 className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Optional */}
-          <div className="mb-6">
-            <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
-              Optional — toggle on/off
-            </p>
-            <div className="space-y-2">
-              {optionalOptions.map((opt) => {
-                const checked = selectedOptions.has(opt.id)
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => toggleOption(opt.id, opt.mandatory)}
-                    className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all duration-150 ${
-                      checked
-                        ? 'bg-accent/10 border-accent/40'
-                        : 'bg-bg-subtle border-border-subtle hover:border-border-strong'
-                    }`}
-                  >
-                    <div
-                      className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border transition-colors ${
-                        checked
-                          ? 'bg-accent border-accent'
-                          : 'border-border-strong bg-transparent'
-                      } flex items-center justify-center`}
-                    >
-                      {checked && (
-                        <svg
-                          viewBox="0 0 10 8"
-                          className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-2"
-                        >
-                          <polyline points="1,4 3.5,6.5 9,1" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-text-primary">
-                        {opt.label}
-                      </p>
-                      <p className="text-xs text-text-tertiary mt-0.5">
-                        {opt.description}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Additional requirements */}
-          <div className="mb-6">
-            <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
-              Additional requirements
-            </p>
-            <div className="relative">
-              <textarea
-                value={additionalReqs}
-                onChange={(e) => setAdditionalReqs(e.target.value)}
-                placeholder="e.g. Use a dark purple colour scheme, add a dashboard page, integrate Stripe payments..."
-                rows={3}
-                className="w-full resize-none rounded-lg border border-border-strong bg-bg-subtle text-sm text-text-primary placeholder:text-text-tertiary px-3 py-2.5 pr-11 focus:outline-none focus:border-accent transition-colors"
-              />
-              <button
-                type="button"
-                onClick={recording ? stopRecording : startRecording}
-                disabled={transcribing}
-                title={recording ? 'Stop recording' : 'Speak your requirements'}
-                className={`absolute right-2.5 bottom-2.5 p-1.5 rounded-md transition-colors ${
-                  recording
-                    ? 'text-red-400 bg-red-400/10 hover:bg-red-400/20'
-                    : 'text-text-tertiary hover:text-text-primary hover:bg-bg-elevated'
-                } disabled:opacity-50`}
-              >
-                {transcribing ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : recording ? (
-                  <MicOff className="w-4 h-4" />
-                ) : (
-                  <Mic className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            {recording && (
-              <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
-                Recording... tap the mic to stop
-              </p>
-            )}
-            {transcribing && (
-              <p className="text-xs text-text-tertiary mt-1.5">
-                Transcribing...
-              </p>
-            )}
-          </div>
-
-          {/* Submit */}
+          {/* Close button */}
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={handleClose}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg py-3 text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute top-4 right-4 p-1.5 rounded-md text-text-muted hover:text-text-primary hover:bg-bg-subtle transition-colors disabled:opacity-40"
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Starting Resurrection...
-              </>
-            ) : (
-              <>
-                Approve & Start Resurrection
-                <ArrowRight className="w-4 h-4" />
-              </>
-            )}
+            <X className="w-4 h-4" />
           </button>
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-6">
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                className={`h-1 rounded-full transition-all duration-300 ${
+                  i === step ? 'w-6 bg-accent' : i < step ? 'w-3 bg-accent/40' : 'w-3 bg-border-strong'
+                }`}
+              />
+            ))}
+          </div>
+
+          <AnimatePresence mode="wait">
+            {step === 0 ? (
+              <RepoOverview
+                key="overview"
+                repoUrl={repoUrl}
+                repoName={repoName}
+                repoDescription={repoDescription}
+                techStack={techStack}
+                legacyScore={legacyScore}
+                weaknesses={weaknesses}
+                onNext={() => setStep(1)}
+              />
+            ) : (
+              <motion.div
+                key="plan"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              >
+                {/* Header */}
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold text-text-primary">
+                    Modernisation Plan
+                  </h2>
+                  <p className="text-sm text-text-secondary mt-1">
+                    Review what Lazarus will change. Locked items are required for the
+                    app to run in WebContainers.
+                  </p>
+                </div>
+
+                {/* Mandatory */}
+                <div className="mb-5">
+                  <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+                    Required
+                  </p>
+                  <div className="space-y-2">
+                    {mandatoryOptions.map((opt) => (
+                      <div
+                        key={opt.id}
+                        className="flex items-start gap-3 p-3 rounded-lg bg-bg-subtle border border-border-subtle opacity-70"
+                      >
+                        <div className="mt-0.5 flex-shrink-0 text-accent">
+                          <Lock className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-text-primary">
+                            {opt.label}
+                          </p>
+                          <p className="text-xs text-text-tertiary mt-0.5">
+                            {opt.description}
+                          </p>
+                        </div>
+                        <CheckCircle2 className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional */}
+                <div className="mb-6">
+                  <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-3">
+                    Optional — toggle on/off
+                  </p>
+                  <div className="space-y-2">
+                    {optionalOptions.map((opt) => {
+                      const checked = selectedOptions.has(opt.id)
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => toggleOption(opt.id, opt.mandatory)}
+                          className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-all duration-150 ${
+                            checked
+                              ? 'bg-accent/10 border-accent/40'
+                              : 'bg-bg-subtle border-border-subtle hover:border-border-strong'
+                          }`}
+                        >
+                          <div
+                            className={`mt-0.5 flex-shrink-0 w-4 h-4 rounded border transition-colors ${
+                              checked
+                                ? 'bg-accent border-accent'
+                                : 'border-border-strong bg-transparent'
+                            } flex items-center justify-center`}
+                          >
+                            {checked && (
+                              <svg
+                                viewBox="0 0 10 8"
+                                className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-2"
+                              >
+                                <polyline points="1,4 3.5,6.5 9,1" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-text-primary">
+                              {opt.label}
+                            </p>
+                            <p className="text-xs text-text-tertiary mt-0.5">
+                              {opt.description}
+                            </p>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Additional requirements */}
+                <div className="mb-6">
+                  <p className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
+                    Additional requirements
+                  </p>
+                  <div className="relative">
+                    <textarea
+                      value={additionalReqs}
+                      onChange={(e) => setAdditionalReqs(e.target.value)}
+                      placeholder="e.g. Use a dark purple colour scheme, add a dashboard page, integrate Stripe payments..."
+                      rows={3}
+                      className="w-full resize-none rounded-lg border border-border-strong bg-bg-subtle text-sm text-text-primary placeholder:text-text-tertiary px-3 py-2.5 pr-11 focus:outline-none focus:border-accent transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={recording ? stopRecording : startRecording}
+                      disabled={transcribing}
+                      title={recording ? 'Stop recording' : 'Speak your requirements'}
+                      className={`absolute right-2.5 bottom-2.5 p-1.5 rounded-md transition-colors ${
+                        recording
+                          ? 'text-red-400 bg-red-400/10 hover:bg-red-400/20'
+                          : 'text-text-tertiary hover:text-text-primary hover:bg-bg-elevated'
+                      } disabled:opacity-50`}
+                    >
+                      {transcribing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : recording ? (
+                        <MicOff className="w-4 h-4" />
+                      ) : (
+                        <Mic className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  {recording && (
+                    <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block" />
+                      Recording... tap the mic to stop
+                    </p>
+                  )}
+                  {transcribing && (
+                    <p className="text-xs text-text-tertiary mt-1.5">
+                      Transcribing...
+                    </p>
+                  )}
+                </div>
+
+                {/* Back + Submit row */}
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setStep(0)}
+                    className="flex items-center gap-1.5 px-4 py-3 rounded-lg border border-border-strong text-sm text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg py-3 text-sm transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Starting Resurrection...
+                      </>
+                    ) : (
+                      <>
+                        Approve & Start Resurrection
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </AnimatePresence>

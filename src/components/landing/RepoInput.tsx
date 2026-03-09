@@ -61,17 +61,17 @@ export function RepoInput({ onFillRef }: RepoInputProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
-      className="w-full max-w-[680px] mx-auto mt-12 px-4"
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: 0.25 }}
+      className="w-full max-w-[680px] mx-auto mt-10 px-4"
     >
       <form onSubmit={handleSubmit}>
         <div
-          className={`flex items-center bg-bg-elevated border rounded-xl p-1 pl-4 transition-all duration-200 ${
+          className={`flex items-center backdrop-blur-md bg-white/[0.04] border rounded-2xl p-1 pl-4 transition-all duration-200 ${
             error
-              ? 'border-error'
-              : 'border-border focus-within:border-accent focus-within:shadow-[0_0_0_3px_var(--accent-dim)]'
+              ? 'border-error/50 shadow-[0_0_0_3px_rgba(248,113,113,0.1)]'
+              : 'border-white/[0.1] focus-within:border-accent/50 focus-within:shadow-[0_0_0_3px_rgba(129,140,248,0.12),0_0_40px_rgba(129,140,248,0.06)]'
           }`}
         >
           <Zap className="w-4 h-4 text-text-muted flex-shrink-0" />
@@ -88,7 +88,17 @@ export function RepoInput({ onFillRef }: RepoInputProps) {
           <button
             type="submit"
             disabled={loading || !url.trim()}
-            className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg px-5 py-2.5 text-sm transition-all duration-150 hover:-translate-y-px active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            className="flex items-center gap-2 text-white font-semibold rounded-xl px-5 py-2.5 text-sm transition-all duration-200 hover:-translate-y-px active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+            style={{
+              background:
+                loading || !url.trim()
+                  ? 'rgba(99,102,241,0.4)'
+                  : 'linear-gradient(135deg, #6366f1 0%, #818cf8 100%)',
+              boxShadow:
+                loading || !url.trim()
+                  ? 'none'
+                  : '0 2px 20px rgba(129,140,248,0.35)',
+            }}
           >
             {loading ? (
               <>
@@ -106,7 +116,7 @@ export function RepoInput({ onFillRef }: RepoInputProps) {
       </form>
 
       {error && (
-        <p className="text-error text-sm mt-2 text-center">{error}</p>
+        <p className="text-error text-sm mt-2.5 text-center">{error}</p>
       )}
     </motion.div>
   )

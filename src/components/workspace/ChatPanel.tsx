@@ -310,7 +310,7 @@ export function ChatPanel() {
             placeholder={
               disabled
                 ? 'Wait for completion first'
-                : 'Describe a change...'
+                : 'Ask a question or describe a change...'
             }
             disabled={disabled}
             rows={1}
