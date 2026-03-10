@@ -41,16 +41,22 @@ export async function POST(req: NextRequest) {
   // Always use the canonical clone URL — strips /tree/branch, /blob/..., query params, etc.
   const cloneUrl = `https://github.com/${repoInfo.owner}/${repoInfo.repo}`
 
-  await inngest.send({
-    name: 'lazarus/scan.requested',
-    data: {
-      jobId,
-      repoUrl: cloneUrl,
-      userId,
-      repoOwner: repoInfo.owner,
-      repoName: repoInfo.repo,
-    },
-  })
+  try {
+    await inngest.send({
+      name: 'lazarus/scan.requested',
+      data: {
+        jobId,
+        repoUrl: cloneUrl,
+        userId,
+        repoOwner: repoInfo.owner,
+        repoName: repoInfo.repo,
+      },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[scan] inngest.send failed:', message)
+    return NextResponse.json({ error: `Failed to queue scan job: ${message}` }, { status: 502 })
+  }
 
   return NextResponse.json({ jobId })
 }
