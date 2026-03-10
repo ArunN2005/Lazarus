@@ -4,9 +4,8 @@ import { z } from 'zod'
 import { getJob, addChatMessage } from '@/lib/dynamodb'
 import { getAllRepoFiles } from '@/lib/s3'
 import { invokeBedrockSync, streamBedrock, calculateCost } from '@/lib/bedrock'
-import { updateJob } from '@/lib/dynamodb'
+import { updateJob, pushStreamEvent } from '@/lib/dynamodb'
 import { uploadGeneratedFile } from '@/lib/s3'
-import { pushEvent } from '@/inngest/functions/resurrector'
 import type { ChatMessage } from '@/types'
 
 const chatSchema = z.object({
@@ -167,11 +166,7 @@ Modify ONLY the files that need changes. Output each modified file in the XML fo
       const cost = calculateCost('sonnet', inputTokens, outputTokens)
       const newCost = (job.totalCostUSD ?? 0) + cost
       updateJob(params.jobId, { totalCostUSD: newCost })
-      pushEvent(params.jobId, {
-        jobId: params.jobId,
-        type: 'cost_update',
-        totalUSD: newCost,
-      })
+      void pushStreamEvent(params.jobId, { type: 'cost_update', totalUSD: newCost })
     },
   })
 
@@ -186,23 +181,14 @@ Modify ONLY the files that need changes. Output each modified file in the XML fo
     updatedFiles.push({ path: filePath, content })
 
     await uploadGeneratedFile(params.jobId, filePath, content)
-    pushEvent(params.jobId, {
-      jobId: params.jobId,
-      type: 'file_complete',
-      file: filePath,
-      content,
-    })
+    void pushStreamEvent(params.jobId, { type: 'file_complete', file: filePath, content })
   }
 
   // Signal the frontend whether package.json changed so it knows to re-install
   const needsInstall = updatedFiles.some(
     (f) => f.path === 'package.json' || f.path.endsWith('/package.json')
   )
-  pushEvent(params.jobId, {
-    jobId: params.jobId,
-    type: 'chat_complete',
-    needsInstall,
-  })
+  void pushStreamEvent(params.jobId, { type: 'chat_complete', needsInstall })
 
   const aiMsg: ChatMessage = {
     id: crypto.randomUUID(),
