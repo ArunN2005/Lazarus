@@ -15,7 +15,7 @@ export function RepoInput({ onFillRef }: RepoInputProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
 
   const fillUrl = useCallback((repoUrl: string) => {
     setUrl(repoUrl)
@@ -37,9 +37,13 @@ export function RepoInput({ onFillRef }: RepoInputProps) {
     setError(null)
 
     try {
+      const token = await getToken()
       const res = await fetch('/api/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ repoUrl: url.trim() }),
       })
 
