@@ -17,7 +17,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
-  const userId = getAuthUserId()
+  const userId = await getAuthUserId()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

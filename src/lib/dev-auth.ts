@@ -1,21 +1,31 @@
-import { auth } from '@clerk/nextjs/server'
+import { verifyToken } from '@clerk/backend'
+import { cookies } from 'next/headers'
 
 const DEV_USER_ID = 'dev_user_local'
 
 /**
- * Wraps Clerk's auth() with a development fallback.
- * In development, always uses a consistent dev user ID to avoid
- * intermittent Clerk clock skew issues causing userId mismatches.
+ * Verifies the Clerk session token directly from cookies.
+ * Required because Amplify's middleware Lambda does not receive CLERK_SECRET_KEY,
+ * so we skip clerkMiddleware() and verify the token per-route instead.
  */
-export function getAuthUserId(): string | null {
-  // In dev mode, always use consistent dev user to avoid clock skew issues
+export async function getAuthUserId(): Promise<string | null> {
   if (process.env.NODE_ENV === 'development') {
     return DEV_USER_ID
   }
 
   try {
-    const { userId } = auth()
-    return userId
+    const cookieStore = cookies()
+    // Clerk dev instances use __clerk_db_jwt; production instances use __session
+    const token =
+      cookieStore.get('__session')?.value ??
+      cookieStore.get('__clerk_db_jwt')?.value
+
+    if (!token) return null
+
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY ?? '',
+    })
+    return payload.sub ?? null
   } catch {
     return null
   }

@@ -9,7 +9,7 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
-  const userId = getAuthUserId()
+  const userId = await getAuthUserId()
   if (!userId) {
     return new Response('Unauthorized', { status: 401 })
   }

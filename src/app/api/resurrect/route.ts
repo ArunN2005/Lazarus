@@ -14,7 +14,7 @@ const resurrectSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const userId = getAuthUserId()
+  const userId = await getAuthUserId()
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
