@@ -8,8 +8,8 @@ const envSchema = z.object({
   // AWS — credentials and region are provided automatically by the Amplify compute role at runtime
 
   // Bedrock
-  BEDROCK_MODEL_SONNET: z.string().default('us.anthropic.claude-sonnet-4-6'),
-  BEDROCK_MODEL_HAIKU: z.string().default('us.anthropic.claude-haiku-4-5'),
+  BEDROCK_MODEL_SONNET: z.string().default('anthropic.claude-sonnet-4-6'),
+  BEDROCK_MODEL_HAIKU: z.string().default('anthropic.claude-haiku-4-5-20251001-v1:0'),
 
   // DynamoDB
   DYNAMODB_TABLE_NAME: z.string().default('lazarus-jobs'),
