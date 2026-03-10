@@ -1,68 +1,11 @@
+import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { inngest } from '@/lib/inngest-client'
-import { getJob, updateJob, putFileRecord, pushStreamEvent } from '@/lib/dynamodb'
-import { getAllRepoFiles, uploadGeneratedFile, listRepoBinaryAssets, getRepoBinaryAssetUrl, getRepoBinaryAsset } from '@/lib/s3'
-import { streamBedrock, calculateCost } from '@/lib/bedrock'
+import { getJob, updateJob, pushStreamEvent } from '@/lib/dynamodb'
+import { getAllRepoFiles, listRepoBinaryAssets, getRepoBinaryAssetUrl, uploadPromptFile } from '@/lib/s3'
 import {
   buildResurrectionPrompt,
   buildSystemPromptWithContext,
 } from '@/lib/migration-prompt'
-
-function parseFileStream(
-  onFileStart: (path: string) => void,
-  onFileComplete: (path: string, content: string) => void
-) {
-  let buffer = ''
-  let currentFile: string | null = null
-  let currentContent = ''
-
-  return {
-    feed(token: string) {
-      buffer += token
-
-      // Check for file_start
-      if (!currentFile) {
-        const startMatch = buffer.match(/<file path="([^"]+)">/)
-        if (startMatch) {
-          currentFile = startMatch[1]
-          const afterTag = buffer.indexOf('>') + 1
-          currentContent = buffer.slice(afterTag)
-          buffer = ''
-          onFileStart(currentFile)
-
-          // Check if content already contains closing tag
-          const endIdx = currentContent.indexOf('</file>')
-          if (endIdx !== -1) {
-            const finalContent = currentContent.slice(0, endIdx).trim()
-            onFileComplete(currentFile, finalContent)
-            buffer = currentContent.slice(endIdx + '</file>'.length)
-            currentContent = ''
-            currentFile = null
-          }
-          return
-        }
-      }
-
-      // Currently streaming file content
-      if (currentFile) {
-        currentContent += token
-        buffer = ''
-
-        // Check for closing tag
-        const endIdx = currentContent.indexOf('</file>')
-        if (endIdx !== -1) {
-          const finalContent = currentContent.slice(0, endIdx).trim()
-          onFileComplete(currentFile, finalContent)
-          buffer = currentContent.slice(endIdx + '</file>'.length)
-          currentContent = ''
-          currentFile = null
-        }
-      }
-    },
-    getCurrentFile(): string | null {
-      return currentFile
-    },
-  }
-}
 
 export const resurrector = inngest.createFunction(
   {
@@ -88,9 +31,7 @@ export const resurrector = inngest.createFunction(
       await updateJob(jobId, { status: 'resurrecting' })
     })
 
-    // Only return small metadata from this step — file contents stay in S3
-    // Returning file contents as a step result hits Inngest's ~4MB response limit
-    // Generate 7-day presigned URLs so Bedrock can embed them directly in generated code
+    // Only return small metadata — file contents stay in S3
     const binaryAssets = await step.run('load-files', async () => {
       const paths = await listRepoBinaryAssets(jobId)
       const entries = await Promise.all(
@@ -99,10 +40,10 @@ export const resurrector = inngest.createFunction(
       return Object.fromEntries(entries) as Record<string, string>
     })
 
-    await step.run('generate', async () => {
-      // Fetch files directly inside the step so they never flow through Inngest's response body
+    // Build the Bedrock prompts and upload to S3 so the Lambda can read them.
+    // This runs well within the 29s API Gateway limit (string-building only).
+    await step.run('prepare-prompt', async () => {
       const repoFiles = await getAllRepoFiles(jobId)
-      const filesMap = repoFiles
       const techStackStr = job.techStack
         ? Object.entries(job.techStack)
             .filter(([, v]) => v !== null && v !== 'unknown')
@@ -115,72 +56,50 @@ export const resurrector = inngest.createFunction(
         job.clarificationAnswers
       )
       const userMessage = buildResurrectionPrompt(
-        filesMap,
+        repoFiles,
         techStackStr,
         job.clarificationAnswers,
         new Map(Object.entries(binaryAssets))
       )
 
-      const completedFiles = new Map<string, string>()
-
-      const parser = parseFileStream(
-        (filePath) => {
-          void pushStreamEvent(jobId, { type: 'file_start', file: filePath })
-          putFileRecord({
-            jobId,
-            filePath,
-            originalContent: filesMap.get(filePath) ?? null,
-            generatedContent: null,
-            status: 'streaming',
-          })
-        },
-        (filePath, content) => {
-          completedFiles.set(filePath, content)
-          void pushStreamEvent(jobId, { type: 'file_complete', file: filePath, content })
-          uploadGeneratedFile(jobId, filePath, content)
-          putFileRecord({
-            jobId,
-            filePath,
-            originalContent: filesMap.get(filePath) ?? null,
-            generatedContent: content,
-            status: 'complete',
-          })
-        }
-      )
-
-      await streamBedrock({
-        model: 'sonnet',
-        system: systemPrompt,
-        userMessage,
-        maxTokens: 128000,
-        onToken: async (token) => {
-          parser.feed(token)
-        },
-        onComplete: ({ inputTokens, outputTokens }) => {
-          const cost = calculateCost('sonnet', inputTokens, outputTokens)
-          void pushStreamEvent(jobId, { type: 'cost_update', totalUSD: cost })
-          updateJob(jobId, { totalCostUSD: cost })
-        },
-      })
-
-      return { fileCount: completedFiles.size }
+      await Promise.all([
+        uploadPromptFile(jobId, 'system', systemPrompt),
+        uploadPromptFile(jobId, 'user', userMessage),
+      ])
     })
 
-    await step.run('copy-assets', async () => {
-      const paths = Object.keys(binaryAssets)
-      if (paths.length === 0) return
-      await Promise.all(
-        paths.map(async (filePath) => {
-          try {
-            const bytes = await getRepoBinaryAsset(jobId, filePath)
-            const base64 = Buffer.from(bytes).toString('base64')
-            void pushStreamEvent(jobId, { type: 'asset_complete', file: filePath, base64 })
-          } catch {
-            // skip assets that fail to fetch
-          }
+    // Fire the generation Lambda asynchronously — returns in ~100ms.
+    // The Lambda runs Bedrock streaming (up to 15 min) and writes results to DynamoDB/S3.
+    await step.run('invoke-generation', async () => {
+      const lambdaClient = new LambdaClient({
+        region: process.env.AWS_REGION ?? 'us-east-1',
+      })
+      await lambdaClient.send(
+        new InvokeCommand({
+          FunctionName: process.env.GENERATION_LAMBDA_ARN ?? 'lazarus-generate',
+          InvocationType: 'Event', // async — does not wait for result
+          Payload: Buffer.from(JSON.stringify({ jobId })),
         })
       )
     })
+
+    // Poll DynamoDB every 30s until the Lambda signals completion (max 15 min = 30 × 30s).
+    // step.sleep() suspends the Inngest function without holding a Lambda connection open.
+    let generationComplete = false
+    for (let i = 0; i < 30 && !generationComplete; i++) {
+      await step.sleep(`poll-generation-${i}`, '30s')
+      generationComplete = await step.run(`check-generation-${i}`, async () => {
+        const j = await getJob(jobId)
+        if (j?.status === 'generation_failed') {
+          throw new Error('Generation Lambda failed — check Lambda CloudWatch logs')
+        }
+        return j?.status === 'generation_complete'
+      })
+    }
+
+    if (!generationComplete) {
+      throw new Error('Generation timed out after 15 minutes')
+    }
 
     await step.run('finalize', async () => {
       await updateJob(jobId, {

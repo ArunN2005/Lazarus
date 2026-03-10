@@ -14,6 +14,8 @@ export type JobStatus =
   | 'scanned'
   | 'clarifying'
   | 'resurrecting'
+  | 'generation_complete'
+  | 'generation_failed'
   | 'complete'
   | 'failed'
   | 'rejected'

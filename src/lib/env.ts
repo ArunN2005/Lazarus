@@ -32,6 +32,9 @@ const envSchema = z.object({
   // App
   NEXT_PUBLIC_APP_URL: z.string().default(''),
 
+  // Standalone generation Lambda (bypasses API Gateway 29s timeout)
+  GENERATION_LAMBDA_ARN: z.string().default('lazarus-generate'),
+
   // Sarvam (speech-to-text)
   SARVAM_API_KEY: z.string().default('sk_e7m6dxrd_CvVbrXUZrtqyp3HwAo7QESKK'),
 })

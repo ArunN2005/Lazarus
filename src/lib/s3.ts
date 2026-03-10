@@ -192,6 +192,34 @@ export async function uploadGeneratedImage(
   )
 }
 
+export async function uploadPromptFile(
+  jobId: string,
+  name: 'system' | 'user',
+  content: string
+): Promise<void> {
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: env.S3_BUCKET_REPOS,
+      Key: `prompts/${jobId}/${name}.txt`,
+      Body: content,
+      ContentType: 'text/plain',
+    })
+  )
+}
+
+export async function getPromptFile(
+  jobId: string,
+  name: 'system' | 'user'
+): Promise<string> {
+  const result = await s3.send(
+    new GetObjectCommand({
+      Bucket: env.S3_BUCKET_REPOS,
+      Key: `prompts/${jobId}/${name}.txt`,
+    })
+  )
+  return (await result.Body?.transformToString()) ?? ''
+}
+
 export async function listRepoBinaryAssets(jobId: string): Promise<string[]> {
   const prefix = `repos/${jobId}/binary/`
   const result = await s3.send(
