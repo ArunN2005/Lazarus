@@ -5,6 +5,7 @@ import {
   PutCommand,
   QueryCommand,
   UpdateCommand,
+  BatchWriteCommand,
 } from '@aws-sdk/lib-dynamodb'
 
 type StreamEvent = Record<string, unknown>
@@ -142,6 +143,35 @@ export async function pushStreamEvent(jobId: string, event: StreamEvent): Promis
       Item: { PK: `EVTBUF#${jobId}`, SK: sk, ...event },
     })
   )
+}
+
+export async function clearStreamEvents(jobId: string): Promise<void> {
+  // Query all event keys in the EVTBUF partition, then delete in batches of 25
+  let lastKey: Record<string, unknown> | undefined
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': `EVTBUF#${jobId}` },
+        ProjectionExpression: 'PK, SK',
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    const items = result.Items ?? []
+    for (let i = 0; i < items.length; i += 25) {
+      await docClient.send(
+        new BatchWriteCommand({
+          RequestItems: {
+            [TABLE]: items.slice(i, i + 25).map((item) => ({
+              DeleteRequest: { Key: { PK: item['PK'], SK: item['SK'] } },
+            })),
+          },
+        })
+      )
+    }
+    lastKey = result.LastEvaluatedKey as Record<string, unknown> | undefined
+  } while (lastKey)
 }
 
 export async function getStreamEvents(jobId: string, since: number): Promise<StreamEvent[]> {

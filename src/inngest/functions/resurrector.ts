@@ -1,6 +1,6 @@
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda'
 import { inngest } from '@/lib/inngest-client'
-import { getJob, updateJob, pushStreamEvent } from '@/lib/dynamodb'
+import { getJob, updateJob, pushStreamEvent, clearStreamEvents } from '@/lib/dynamodb'
 import { getAllRepoFiles, listRepoBinaryAssets, getRepoBinaryAssetUrl, uploadPromptFile } from '@/lib/s3'
 import {
   buildResurrectionPrompt,
@@ -28,6 +28,7 @@ export const resurrector = inngest.createFunction(
     })
 
     await step.run('update-status', async () => {
+      await clearStreamEvents(jobId)
       await updateJob(jobId, { status: 'resurrecting' })
     })
 
