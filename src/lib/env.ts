@@ -15,8 +15,8 @@ const envSchema = z.object({
   DYNAMODB_TABLE_NAME: z.string().default('lazarus-jobs'),
 
   // S3
-  S3_BUCKET_REPOS: z.string().default('lazarus-repos'),
-  S3_BUCKET_GENERATED: z.string().default('lazarus-generated'),
+  S3_BUCKET_REPOS: z.string().default('lazarus-repos-519010179949'),
+  S3_BUCKET_GENERATED: z.string().default('lazarus-generated-519010179949'),
 
   // Secrets Manager
   SECRETS_MANAGER_PREFIX: z.string().default('lazarus'),
