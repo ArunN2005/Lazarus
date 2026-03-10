@@ -18,12 +18,12 @@ const envSchema = z.object({
   S3_BUCKET_REPOS: z.string().min(1),
   S3_BUCKET_GENERATED: z.string().min(1),
 
-  // Secrets Manager
-  SECRETS_MANAGER_PREFIX: z.string().min(1),
+  // Secrets Manager — only needed for user ENV vars in resurrected apps
+  SECRETS_MANAGER_PREFIX: z.string().default('lazarus'),
 
-  // GitHub
-  GITHUB_CLIENT_ID: z.string().min(1),
-  GITHUB_CLIENT_SECRET: z.string().min(1),
+  // GitHub — only needed for PR creation; optional so app boots without a GitHub OAuth App
+  GITHUB_CLIENT_ID: z.string().default(''),
+  GITHUB_CLIENT_SECRET: z.string().default(''),
 
   // Inngest
   INNGEST_EVENT_KEY: z.string().min(1),
