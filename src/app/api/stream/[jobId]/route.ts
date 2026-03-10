@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUserId } from '@/lib/dev-auth'
 import { getStreamEvents } from '@/lib/dynamodb'
 
@@ -14,68 +14,27 @@ export async function GET(
     userId = await getAuthUserId(req)
   } catch (err) {
     console.error('[stream] auth error:', err)
-    return new Response('Internal error', { status: 500 })
+    return new NextResponse('Internal error', { status: 500 })
   }
 
   if (!userId) {
-    return new Response('Unauthorized', { status: 401 })
+    return new NextResponse('Unauthorized', { status: 401 })
   }
 
   const { jobId } = params
-  let eventIndex = 0
-  let closed = false
+  const since = parseInt(req.nextUrl.searchParams.get('since') ?? '0', 10)
 
-  const stream = new ReadableStream({
-    start(controller) {
-      const encoder = new TextEncoder()
+  try {
+    const events = await getStreamEvents(jobId, isNaN(since) ? 0 : since)
+    const done = events.some((e) => e['type'] === 'complete' || e['type'] === 'error')
 
-      const send = (data: string) => {
-        if (closed) return
-        try {
-          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
-        } catch {
-          closed = true
-        }
-      }
-
-      let pollTimeout: ReturnType<typeof setTimeout> | null = null
-
-      const poll = async () => {
-        if (closed) return
-        try {
-          const events = await getStreamEvents(jobId, eventIndex)
-          for (const event of events) {
-            send(JSON.stringify(event))
-            eventIndex++
-            if (event.type === 'complete' || event.type === 'error') {
-              closed = true
-              controller.close()
-              return
-            }
-          }
-        } catch (err) {
-          console.error('[stream] poll error:', err)
-          // DynamoDB error — keep polling
-        }
-        if (!closed) {
-          pollTimeout = setTimeout(poll, 500)
-        }
-      }
-
-      void poll()
-
-      req.signal?.addEventListener('abort', () => {
-        closed = true
-        if (pollTimeout) clearTimeout(pollTimeout)
-      })
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
-    },
-  })
+    return NextResponse.json({
+      events,
+      nextIndex: (isNaN(since) ? 0 : since) + events.length,
+      done,
+    })
+  } catch (err) {
+    console.error('[stream] getStreamEvents error:', err)
+    return new NextResponse('Internal error', { status: 500 })
+  }
 }
