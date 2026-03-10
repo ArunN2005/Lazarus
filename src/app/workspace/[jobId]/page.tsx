@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { WorkspaceLayout } from '@/components/workspace/WorkspaceLayout'
 import { ClarificationModal } from '@/components/workspace/ClarificationModal'
@@ -49,8 +49,7 @@ function buildFileTreeFromPaths(paths: string[]): FileTreeNode[] {
 
 export default function WorkspacePage() {
   const params = useParams()
-  const router = useRouter()
-  const { isSignedIn, isLoaded, getToken } = useAuth()
+  const { getToken } = useAuth()
   const jobId = params.jobId as string
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -61,14 +60,6 @@ export default function WorkspacePage() {
 
   // Boot WebContainer
   useWebContainer()
-
-  // Redirect if not signed in (skip in dev — Clerk clock skew causes false negatives)
-  const isDev = process.env.NODE_ENV === 'development'
-  useEffect(() => {
-    if (!isDev && isLoaded && !isSignedIn) {
-      router.push('/sign-in')
-    }
-  }, [isLoaded, isSignedIn, router, isDev])
 
   // Load job data with polling
   useEffect(() => {
@@ -218,14 +209,6 @@ export default function WorkspacePage() {
     },
     [jobId, store, startStreaming]
   )
-
-  if (!isLoaded) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-bg-base">
-        <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
 
   return (
     <>
