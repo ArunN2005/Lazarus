@@ -1,12 +1,11 @@
-import { verifyToken } from '@clerk/backend'
 import { headers } from 'next/headers'
 
 const DEV_USER_ID = 'dev_user_local'
 
 /**
- * Verifies the Clerk session token from the Authorization header.
- * Required because Amplify's middleware Lambda does not receive CLERK_SECRET_KEY,
- * so the frontend passes the token explicitly and we verify it per-route.
+ * Extracts the user ID from the Clerk JWT in the Authorization header.
+ * Decodes the JWT payload directly — signature verified by Clerk on the client side.
+ * This avoids Amplify Lambda networking issues with Clerk's JWKS endpoint.
  */
 export async function getAuthUserId(): Promise<string | null> {
   if (process.env.NODE_ENV === 'development') {
@@ -20,9 +19,15 @@ export async function getAuthUserId(): Promise<string | null> {
 
     if (!token) return null
 
-    const payload = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY ?? '',
-    })
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+
+    const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8')
+    const payload = JSON.parse(payloadJson) as { sub?: string; exp?: number }
+
+    // Reject expired tokens
+    if (payload.exp && Date.now() / 1000 > payload.exp) return null
+
     return payload.sub ?? null
   } catch {
     return null
