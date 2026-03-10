@@ -1,47 +1,11 @@
 import { inngest } from '@/lib/inngest-client'
-import { getJob, updateJob, putFileRecord } from '@/lib/dynamodb'
+import { getJob, updateJob, putFileRecord, pushStreamEvent } from '@/lib/dynamodb'
 import { getAllRepoFiles, uploadGeneratedFile, listRepoBinaryAssets, getRepoBinaryAssetUrl, getRepoBinaryAsset } from '@/lib/s3'
 import { streamBedrock, calculateCost } from '@/lib/bedrock'
 import {
   buildResurrectionPrompt,
   buildSystemPromptWithContext,
 } from '@/lib/migration-prompt'
-
-interface StreamEvent {
-  jobId: string
-  type: string
-  file?: string
-  token?: string
-  content?: string
-  base64?: string
-  totalUSD?: number
-  message?: string
-  recoverable?: boolean
-  needsInstall?: boolean
-}
-
-// In-memory event buffer per job — polled by SSE route
-// Must use globalThis so the Map is shared across Next.js webpack bundles
-// (api/inngest and api/stream routes compile into separate bundles)
-const globalForBuffers = globalThis as typeof globalThis & {
-  __lazarusEventBuffers?: Map<string, StreamEvent[]>
-}
-if (!globalForBuffers.__lazarusEventBuffers) {
-  globalForBuffers.__lazarusEventBuffers = new Map()
-}
-const eventBuffers = globalForBuffers.__lazarusEventBuffers
-
-export function getEvents(jobId: string, since: number): StreamEvent[] {
-  const buffer = eventBuffers.get(jobId) ?? []
-  return buffer.slice(since)
-}
-
-export function pushEvent(jobId: string, event: StreamEvent): void {
-  if (!eventBuffers.has(jobId)) {
-    eventBuffers.set(jobId, [])
-  }
-  eventBuffers.get(jobId)!.push(event)
-}
 
 function parseFileStream(
   onFileStart: (path: string) => void,
@@ -161,7 +125,7 @@ export const resurrector = inngest.createFunction(
 
       const parser = parseFileStream(
         (filePath) => {
-          pushEvent(jobId, { jobId, type: 'file_start', file: filePath })
+          void pushStreamEvent(jobId, { type: 'file_start', file: filePath })
           putFileRecord({
             jobId,
             filePath,
@@ -172,12 +136,7 @@ export const resurrector = inngest.createFunction(
         },
         (filePath, content) => {
           completedFiles.set(filePath, content)
-          pushEvent(jobId, {
-            jobId,
-            type: 'file_complete',
-            file: filePath,
-            content,
-          })
+          void pushStreamEvent(jobId, { type: 'file_complete', file: filePath, content })
           uploadGeneratedFile(jobId, filePath, content)
           putFileRecord({
             jobId,
@@ -196,19 +155,10 @@ export const resurrector = inngest.createFunction(
         maxTokens: 128000,
         onToken: async (token) => {
           parser.feed(token)
-          const currentFile = parser.getCurrentFile()
-          if (currentFile) {
-            pushEvent(jobId, {
-              jobId,
-              type: 'token',
-              file: currentFile,
-              token,
-            })
-          }
         },
         onComplete: ({ inputTokens, outputTokens }) => {
           const cost = calculateCost('sonnet', inputTokens, outputTokens)
-          pushEvent(jobId, { jobId, type: 'cost_update', totalUSD: cost })
+          void pushStreamEvent(jobId, { type: 'cost_update', totalUSD: cost })
           updateJob(jobId, { totalCostUSD: cost })
         },
       })
@@ -224,7 +174,7 @@ export const resurrector = inngest.createFunction(
           try {
             const bytes = await getRepoBinaryAsset(jobId, filePath)
             const base64 = Buffer.from(bytes).toString('base64')
-            pushEvent(jobId, { jobId, type: 'asset_complete', file: filePath, base64 })
+            void pushStreamEvent(jobId, { type: 'asset_complete', file: filePath, base64 })
           } catch {
             // skip assets that fail to fetch
           }
@@ -237,7 +187,7 @@ export const resurrector = inngest.createFunction(
         status: 'complete',
         completedAt: new Date().toISOString(),
       })
-      pushEvent(jobId, { jobId, type: 'complete' })
+      void pushStreamEvent(jobId, { type: 'complete' })
     })
   }
 )

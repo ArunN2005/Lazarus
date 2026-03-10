@@ -6,6 +6,9 @@ import {
   QueryCommand,
   UpdateCommand,
 } from '@aws-sdk/lib-dynamodb'
+
+type StreamEvent = Record<string, unknown>
+let _evtSeq = 0
 import { env } from '@/lib/env'
 import type { Job, ChatMessage, FileRecord } from '@/types'
 
@@ -125,4 +128,41 @@ export async function getChatMessages(jobId: string): Promise<ChatMessage[]> {
   )
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   return (result.Items ?? []).map(({ PK: _PK, SK: _SK, ...item }) => item as ChatMessage)
+}
+
+// SSE event buffer stored in DynamoDB so events are visible across Lambda invocations.
+// PK: EVTBUF#${jobId} keeps events in a separate partition from job/file data.
+// SK: EVT#${timestamp_padded}_${seq_padded} ensures chronological ordering.
+export async function pushStreamEvent(jobId: string, event: StreamEvent): Promise<void> {
+  _evtSeq++
+  const sk = `EVT#${Date.now().toString().padStart(15, '0')}_${_evtSeq.toString().padStart(8, '0')}`
+  await docClient.send(
+    new PutCommand({
+      TableName: TABLE,
+      Item: { PK: `EVTBUF#${jobId}`, SK: sk, ...event },
+    })
+  )
+}
+
+export async function getStreamEvents(jobId: string, since: number): Promise<StreamEvent[]> {
+  const items: StreamEvent[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let lastKey: Record<string, any> | undefined
+  do {
+    const result = await docClient.send(
+      new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': `EVTBUF#${jobId}` },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    )
+    for (const item of result.Items ?? []) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { PK: _PK, SK: _SK, ...rest } = item
+      items.push(rest as StreamEvent)
+    }
+    lastKey = result.LastEvaluatedKey
+  } while (lastKey)
+  return items.slice(since)
 }

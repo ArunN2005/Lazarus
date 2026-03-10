@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getAuthUserId } from '@/lib/dev-auth'
-import { getEvents } from '@/inngest/functions/resurrector'
+import { getStreamEvents } from '@/lib/dynamodb'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,43 +31,34 @@ export async function GET(
         }
       }
 
-      const ping = () => {
+      let pollTimeout: ReturnType<typeof setTimeout> | null = null
+
+      const poll = async () => {
         if (closed) return
         try {
-          controller.enqueue(encoder.encode(': ping\n\n'))
+          const events = await getStreamEvents(jobId, eventIndex)
+          for (const event of events) {
+            send(JSON.stringify(event))
+            eventIndex++
+            if (event.type === 'complete' || event.type === 'error') {
+              closed = true
+              controller.close()
+              return
+            }
+          }
         } catch {
-          closed = true
+          // DynamoDB error — keep polling
+        }
+        if (!closed) {
+          pollTimeout = setTimeout(poll, 500)
         }
       }
 
-      const poll = setInterval(() => {
-        if (closed) {
-          clearInterval(poll)
-          clearInterval(pingInterval)
-          return
-        }
-
-        const events = getEvents(jobId, eventIndex)
-        for (const event of events) {
-          send(JSON.stringify(event))
-          eventIndex++
-
-          if (event.type === 'complete' || event.type === 'error') {
-            closed = true
-            clearInterval(poll)
-            clearInterval(pingInterval)
-            controller.close()
-            return
-          }
-        }
-      }, 100)
-
-      const pingInterval = setInterval(ping, 15000)
+      void poll()
 
       req.signal.addEventListener('abort', () => {
         closed = true
-        clearInterval(poll)
-        clearInterval(pingInterval)
+        if (pollTimeout) clearTimeout(pollTimeout)
       })
     },
   })
