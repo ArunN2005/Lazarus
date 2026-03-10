@@ -32,7 +32,6 @@ export async function streamBedrock({
       modelId,
       body: JSON.stringify({
         anthropic_version: 'bedrock-2023-05-31',
-        anthropic_beta: ['context-1m-2025-08-07'],
         max_tokens: maxTokens,
         system,
         messages: [{ role: 'user', content: userMessage }],
