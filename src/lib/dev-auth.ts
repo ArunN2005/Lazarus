@@ -1,13 +1,14 @@
 import { headers } from 'next/headers'
+import { NextRequest } from 'next/server'
 
 const DEV_USER_ID = 'dev_user_local'
 
 /**
- * Extracts the user ID from the Clerk JWT in the Authorization header.
- * Decodes the JWT payload directly — signature verified by Clerk on the client side.
- * This avoids Amplify Lambda networking issues with Clerk's JWKS endpoint.
+ * Extracts the user ID from the Clerk JWT.
+ * Checks Authorization header first, then ?token= query param (for EventSource/SSE).
+ * Decodes the JWT payload directly — avoids JWKS network call in Amplify Lambda.
  */
-export async function getAuthUserId(): Promise<string | null> {
+export async function getAuthUserId(req?: NextRequest): Promise<string | null> {
   if (process.env.NODE_ENV === 'development') {
     return DEV_USER_ID
   }
@@ -15,7 +16,12 @@ export async function getAuthUserId(): Promise<string | null> {
   try {
     const headersList = headers()
     const authorization = headersList.get('Authorization')
-    const token = authorization?.replace('Bearer ', '')
+    let token = authorization?.replace('Bearer ', '')
+
+    // Fallback: ?token= query param for EventSource (can't send headers)
+    if (!token && req) {
+      token = req.nextUrl.searchParams.get('token') ?? undefined
+    }
 
     if (!token) return null
 

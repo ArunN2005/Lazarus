@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useCallback } from 'react'
+import { useAuth } from '@clerk/nextjs'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { useWebContainer, analyzeBackend } from '@/hooks/useWebContainer'
 import { useStreamingEditor } from '@/hooks/useStreamingEditor'
@@ -36,6 +37,7 @@ function buildFileTreeFromPaths(paths: string[]): FileTreeNode[] {
 
 export function useResurrection() {
   const store = useWorkspaceStore()
+  const { getToken } = useAuth()
   const { writeFile, runInstall, runBackendThenFrontend, injectDevtools } = useWebContainer()
   const { appendToken, clearEditor, setLanguage } = useStreamingEditor()
   const eventSourceRef = useRef<EventSource | null>(null)
@@ -61,7 +63,7 @@ export function useResurrection() {
   useEffect(() => { clearEditorRef.current = clearEditor }, [clearEditor])
   useEffect(() => { setLanguageRef.current = setLanguage }, [setLanguage])
 
-  const startStreaming = useCallback(() => {
+  const startStreaming = useCallback(async () => {
     if (!store.jobId) return
 
     // Guard: prevent duplicate EventSource connections
@@ -79,7 +81,12 @@ export function useResurrection() {
     pendingWritesRef.current = []
     completedFilesRef.current = new Map()
 
-    const es = new EventSource(`/api/stream/${store.jobId}`)
+    // EventSource can't send headers — pass token as query param
+    const token = await getToken()
+    const url = token
+      ? `/api/stream/${store.jobId}?token=${encodeURIComponent(token)}`
+      : `/api/stream/${store.jobId}`
+    const es = new EventSource(url)
     eventSourceRef.current = es
 
     es.onmessage = (event) => {

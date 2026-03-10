@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Loader2, Sparkles, X, ImageIcon } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { useWebContainer } from '@/hooks/useWebContainer'
@@ -16,6 +17,7 @@ const SUGGESTIONS = [
 ]
 
 export function ChatPanel() {
+  const { getToken } = useAuth()
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(true)
@@ -67,9 +69,13 @@ export function ChatPanel() {
         currentFiles[path] = content
       }
 
+      const token = await getToken()
       const res = await fetch(`/api/jobs/${jobId}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ message, generatedFiles: currentFiles }),
       })
 
@@ -115,9 +121,13 @@ export function ChatPanel() {
     })
 
     try {
+      const imageToken = await getToken()
       const res = await fetch(`/api/jobs/${jobId}/generate-image`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(imageToken ? { Authorization: `Bearer ${imageToken}` } : {}),
+        },
         body: JSON.stringify({ prompt }),
       })
 

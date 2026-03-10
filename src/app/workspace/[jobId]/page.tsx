@@ -50,7 +50,7 @@ function buildFileTreeFromPaths(paths: string[]): FileTreeNode[] {
 export default function WorkspacePage() {
   const params = useParams()
   const router = useRouter()
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded, getToken } = useAuth()
   const jobId = params.jobId as string
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -81,7 +81,10 @@ export default function WorkspacePage() {
 
     const fetchJob = async () => {
       try {
-        const res = await fetch(`/api/jobs/${jobId}`)
+        const token = await getToken()
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
         if (!res.ok) return
 
         const data = await res.json()
@@ -158,9 +161,13 @@ export default function WorkspacePage() {
       store.setShowMigrationPlanModal(false)
       setLoading(true)
       try {
+        const token = await getToken()
         await fetch('/api/resurrect', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             jobId,
             answers: store.clarificationAnswers,
@@ -186,9 +193,13 @@ export default function WorkspacePage() {
     async (answers: Record<string, string>) => {
       setLoading(true)
       try {
+        const token = await getToken()
         await fetch('/api/resurrect', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
           body: JSON.stringify({
             jobId,
             answers,
