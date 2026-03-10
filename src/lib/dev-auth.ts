@@ -13,18 +13,25 @@ export async function getAuthUserId(req?: NextRequest): Promise<string | null> {
     return DEV_USER_ID
   }
 
+  let token: string | undefined
+
+  // Try Authorization header first
   try {
     const headersList = headers()
     const authorization = headersList.get('Authorization')
-    let token = authorization?.replace('Bearer ', '')
+    if (authorization) token = authorization.replace('Bearer ', '')
+  } catch {
+    // headers() may throw outside request context — fall through to query param
+  }
 
-    // Fallback: ?token= query param for EventSource (can't send headers)
-    if (!token && req) {
-      token = req.nextUrl.searchParams.get('token') ?? undefined
-    }
+  // Fallback: ?token= query param for EventSource (can't send custom headers)
+  if (!token && req) {
+    token = req.nextUrl.searchParams.get('token') ?? undefined
+  }
 
-    if (!token) return null
+  if (!token) return null
 
+  try {
     const parts = token.split('.')
     if (parts.length !== 3) return null
 

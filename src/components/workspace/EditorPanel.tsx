@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react'
 import Editor from '@monaco-editor/react'
 import { Loader2 } from 'lucide-react'
+import { useAuth } from '@clerk/nextjs'
 import { useWorkspaceStore } from '@/stores/workspace-store'
 import { useStreamingEditor } from '@/hooks/useStreamingEditor'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -13,6 +14,7 @@ export function EditorPanel() {
   const originalFiles = useWorkspaceStore((s) => s.originalFiles)
   const currentStreamingFile = useWorkspaceStore((s) => s.currentStreamingFile)
   const jobId = useWorkspaceStore((s) => s.jobId)
+  const { getToken } = useAuth()
   const { setEditor } = useStreamingEditor()
   const [loading, setLoading] = useState(false)
   // Track files we've already tried to fetch (prevents infinite re-fetch on 404)
@@ -42,7 +44,12 @@ export function EditorPanel() {
     let cancelled = false
     setLoading(true)
 
-    fetch(`/api/jobs/${jobId}/file?path=${encodeURIComponent(activeFile)}`)
+    getToken()
+      .then((token) =>
+        fetch(`/api/jobs/${jobId}/file?path=${encodeURIComponent(activeFile)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
+      )
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled && data?.content != null) {

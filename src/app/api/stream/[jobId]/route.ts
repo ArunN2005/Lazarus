@@ -9,7 +9,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { jobId: string } }
 ) {
-  const userId = await getAuthUserId(req)
+  let userId: string | null = null
+  try {
+    userId = await getAuthUserId(req)
+  } catch (err) {
+    console.error('[stream] auth error:', err)
+    return new Response('Internal error', { status: 500 })
+  }
+
   if (!userId) {
     return new Response('Unauthorized', { status: 401 })
   }
@@ -46,7 +53,8 @@ export async function GET(
               return
             }
           }
-        } catch {
+        } catch (err) {
+          console.error('[stream] poll error:', err)
           // DynamoDB error — keep polling
         }
         if (!closed) {
@@ -56,7 +64,7 @@ export async function GET(
 
       void poll()
 
-      req.signal.addEventListener('abort', () => {
+      req.signal?.addEventListener('abort', () => {
         closed = true
         if (pollTimeout) clearTimeout(pollTimeout)
       })
