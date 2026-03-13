@@ -428,6 +428,14 @@ Include ALL files from the original repo, even unchanged ones.
 [complete file contents]
 </file>
 
+CRITICAL output rules:
+- CSS files (.css) must contain ONLY raw CSS. NEVER wrap CSS in <style> tags inside a <file> block.
+  WRONG: <file path="src/index.css"><style>body { ... }</style></file>
+  RIGHT: <file path="src/index.css">body { ... }</file>
+- JS/TS files must contain ONLY the module code. NEVER wrap in <script> tags.
+- HTML files may contain full HTML including <style> and <script> tags as appropriate.
+- JSON files must be valid JSON only — no comments, no trailing commas.
+
 Start with package.json, then tsconfig.json, then work outward to
 utility files, then services, then components, then pages.
 This order ensures each file is written with full context of its dependencies.
