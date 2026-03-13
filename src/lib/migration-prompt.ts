@@ -232,130 +232,189 @@ Frontend API calls (no hardcoded localhost — use relative paths via Vite proxy
   Add lazy loading for routes
   Add proper error boundaries
 
-## UI Modernization — Preserve Identity, Modernize Polish
+## UI Modernization — Same App, Designer-Quality Execution
 
 CRITICAL RULE: The modernized app must still feel like the same app. A railway booking system
 should still look like a railway booking system. A hospital portal should still look like a
-hospital portal. Do NOT impose a generic "SaaS dark theme" on every app — that destroys
-the app's meaning and identity.
+hospital portal. Do NOT impose a generic "SaaS dark theme" on every app.
 
-### Step 1 — Read the original first
-Before writing any styles, read the original files to extract:
-- Brand colors (check CSS files, inline styles, Bootstrap theme overrides)
-- Page structure and navigation layout
-- The app's domain (booking, admin, e-commerce, social, etc.)
-- Existing color scheme: is it light, dark, colorful, minimal?
+The goal: make it look like a professional designer rebuilt it from scratch — same structure,
+same purpose, same colors — but with the visual quality of a 2024 product.
 
-Keep the same brand colors as the base palette. If the original used blue and orange,
-the modernized version uses blue and orange — just cleaner implementations of them.
+### Step 1 — Extract identity before writing a single class
+From the original files, extract:
+- Brand colors (CSS variables, inline styles, Bootstrap theme overrides, hex values)
+- Navigation structure and page hierarchy
+- App domain (booking, admin, e-commerce, social, dashboard, etc.)
+- Base theme: light or dark? colorful or minimal?
 
-### Step 2 — Apply these universal improvements (safe for ALL apps)
-These are low-risk, always appropriate:
+Keep the brand colors as the primary palette. If the original used blue and orange,
+the modernized version uses blue and orange — just cleaner and more intentional.
 
-Rounded corners everywhere:
-  buttons: \`rounded-lg\` or \`rounded-xl\`
-  cards/panels: \`rounded-xl\` or \`rounded-2xl\`
-  inputs: \`rounded-lg\`
-  modals: \`rounded-2xl\`
+### Step 2 — Typography system (biggest impact, lowest risk)
+Replace flat unstyled text with a clear visual hierarchy:
 
-Smooth transitions on interactive elements:
-  \`transition-colors duration-150\` on buttons, links, nav items
-  \`transition-all duration-200\` on cards with hover states
-  \`hover:opacity-90\` or \`hover:brightness-110\` on primary buttons
+Page titles / hero headings:
+  \`text-3xl font-bold tracking-tight text-gray-900\` (light) or \`text-white\` (dark)
+  For main hero: \`text-4xl font-extrabold tracking-tight\`
 
-Clean spacing and typography (replace cramped legacy layouts):
-  Section padding: \`p-6\` or \`p-8\`
-  Card padding: \`p-5\` or \`p-6\`
-  Gap between items: \`gap-4\` or \`gap-6\`
-  Font: inherit the project font or use \`font-sans\`
+Section headings: \`text-xl font-semibold text-gray-800\`
+Card titles: \`text-base font-semibold text-gray-900\`
+Body text: \`text-sm text-gray-600 leading-relaxed\`
+Muted/secondary: \`text-xs text-gray-400 uppercase tracking-wider font-medium\`
 
-Remove table-based and float-based layouts → use flexbox/grid instead.
-Remove inline style= attributes → use Tailwind classes.
+Add subtle gradient text for the single most important heading on the page:
+  \`bg-gradient-to-r from-[brand-color] to-[brand-color-lighter] bg-clip-text text-transparent\`
+  Use this ONCE per page, on the primary page title or brand name only.
+
+### Step 3 — Spacing and layout (replace cramped legacy layouts)
+Remove table-based and float-based layouts → flexbox/grid.
 Remove Bootstrap classes (btn, container, row, col-*) → Tailwind equivalents.
+Remove inline style= attributes → Tailwind classes.
 
-Subtle box shadows (replaces harsh Bootstrap borders):
-  Cards: \`shadow-sm\` (light mode) or \`shadow-md\` (dark mode)
-  Elevated panels: \`shadow-lg\`
-  Modals: \`shadow-2xl\`
+Page root: \`min-h-screen bg-gray-50\` (light) or \`bg-gray-950\` (dark)
+Main container: \`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8\`
+Section gaps: \`space-y-8\` between major sections
+Card padding: \`p-6\`
+Grid layouts: \`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6\`
 
-### Step 3 — Light/Dark mode
-Detect the original app's color scheme:
-- If it was light-themed: keep it light-themed. Add a dark mode toggle if desired.
-- If it was dark-themed: keep it dark-themed.
-- NEVER convert a light-themed app to a forced dark-gradient background.
-  A government portal, a ticket booking site, a hospital system — these are light-themed
-  for accessibility and trust reasons. Modernize them within their natural color space.
+### Step 4 — Cards and surfaces
+Light app cards:
+  \`bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow duration-200 p-6\`
 
-For light apps: clean white/gray backgrounds with the brand color as accent.
-  \`bg-gray-50 min-h-screen\` for the page root
-  \`bg-white rounded-xl shadow-sm border border-gray-100 p-6\` for cards
+Dark app cards:
+  \`bg-gray-900 rounded-2xl border border-gray-800 shadow-sm hover:border-gray-700 transition-colors duration-200 p-6\`
 
-For dark apps: dark backgrounds with the brand color as accent.
-  \`bg-gray-900 min-h-screen\` for the page root
-  \`bg-gray-800 rounded-xl border border-gray-700/50 p-6\` for cards
+Stat/metric cards — add a colored left border accent:
+  \`border-l-4 border-l-[brand-color]\` combined with the card class above
 
-### Step 4 — Glassmorphism (use SELECTIVELY, not everywhere)
-Glass effects are appropriate ONLY for:
-- Login/register forms placed over a background image or gradient
-- Modals and dialog overlays
-- Navbar with scroll blur effect
-- Hero section card on a landing page
+Elevated / featured cards:
+  \`bg-gradient-to-br from-[brand-color]/5 to-[brand-color]/10 border border-[brand-color]/20 rounded-2xl p-6\`
 
-Glass effect pattern (for the above specific cases only):
-  \`backdrop-blur-md bg-white/80 border border-white/30 rounded-2xl shadow-lg\` (light)
-  \`backdrop-blur-md bg-gray-900/80 border border-white/10 rounded-2xl shadow-lg\` (dark)
+### Step 5 — Buttons with micro-interactions
+Primary (brand color):
+  \`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[brand-color] text-white text-sm font-semibold shadow-sm hover:shadow-md hover:opacity-90 active:scale-[0.97] transition-all duration-150\`
 
-DO NOT apply glass/blur to: regular content cards, tables, sidebars, list items,
-form fields, stat panels, or any element that the user will read repeatedly.
-Too much blur makes content hard to read and makes the app feel like a template, not a product.
+Secondary:
+  \`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 active:scale-[0.97] transition-all duration-150\`
 
-### Step 5 — Navbar
-The navbar should match the original's navigation structure exactly (same links, same logo).
+Destructive:
+  \`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 active:scale-[0.97] transition-all duration-150\`
+
+Icon buttons (no label):
+  \`p-2 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors duration-150\`
+
+### Step 6 — Forms and Inputs
+Wrap each field in a div with label above input, never beside:
+\`\`\`
+<div className="space-y-1.5">
+  <label className="block text-sm font-medium text-gray-700">Label</label>
+  <input className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm
+    focus:outline-none focus:ring-2 focus:ring-[brand-color]/30 focus:border-[brand-color]
+    transition-colors duration-150 bg-white" />
+</div>
+\`\`\`
+For dark: \`bg-gray-800 border-gray-700 text-white placeholder:text-gray-500\`
+
+Form cards / login boxes: use the glass pattern (see Step 8).
+Submit buttons: full-width \`w-full\` with the primary button style above.
+
+### Step 7 — Navbar
+Match the original navigation structure exactly (same links, same logo position).
 Modernize only the styling:
-- Add \`backdrop-blur-sm\` and a subtle bottom border
-- Make it \`sticky top-0 z-50\`
-- Add hover states to nav links
-- Keep the original brand color for the active state
-- Light app navbar: \`bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm\`
-- Dark app navbar: \`bg-gray-900/95 backdrop-blur-sm border-b border-gray-800\`
+  Light: \`sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-200/80 shadow-sm\`
+  Dark: \`sticky top-0 z-50 bg-gray-950/90 backdrop-blur-md border-b border-gray-800\`
 
-### Step 6 — Buttons (use brand colors, not indigo/purple)
-Use the app's own brand color for primary buttons — do not override with generic indigo/purple.
-  Primary (brand color): \`px-4 py-2 rounded-lg bg-[brand-color] text-white font-medium hover:opacity-90 active:scale-[0.98] transition-all duration-150\`
-  Secondary: \`px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors duration-150\` (light)
-  Destructive: \`px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors\`
+Nav links: \`text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors duration-150 px-3 py-2 rounded-lg hover:bg-gray-100\`
+Active link: \`text-[brand-color] bg-[brand-color]/10\`
+Brand/logo: \`text-lg font-bold text-gray-900\` with a colored dot or accent if appropriate
 
-### Step 7 — Forms and Inputs
-  \`w-full px-3 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[brand-color]/40 focus:border-[brand-color] transition-colors duration-150\`
-  For dark apps: \`bg-gray-800 border-gray-700 text-white placeholder:text-gray-500\`
+### Step 8 — Glassmorphism (SELECTIVE use — 3 places only)
+Apply glass ONLY to:
+1. Login/register form card over a gradient background
+2. Modal dialogs / overlay panels
+3. Navbar when the page has a hero image behind it
 
-### Step 8 — Tables
-Modernize table styling but keep the table structure if the original used tables for data.
-  Wrap in: \`<div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">\`
-  Header: \`bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3\`
-  Rows: \`border-b border-gray-100 hover:bg-gray-50 transition-colors px-4 py-3 text-sm\`
-  For dark: \`bg-gray-900 border-gray-800\` header, \`hover:bg-gray-800/50\` rows
+Glass pattern:
+  Light: \`backdrop-blur-xl bg-white/70 border border-white/50 rounded-2xl shadow-lg\`
+  Dark: \`backdrop-blur-xl bg-gray-900/70 border border-white/10 rounded-2xl shadow-xl\`
 
-### Step 9 — Status Badges
-  Success: \`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800\`
-  Warning: \`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800\`
-  Error:   \`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800\`
-  (For dark apps: use /20 backgrounds and lighter text)
+Background for login pages (behind the glass card):
+  \`min-h-screen bg-gradient-to-br from-[brand-color]/10 via-white to-[brand-color-2]/10\`
 
-### Step 10 — Scrollbar and global polish
-  * { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.15) transparent; }
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 9999px; }
+DO NOT apply glass to regular content cards, tables, list items, or form fields inline.
+
+### Step 9 — Tables
+Keep table structure for data. Modernize styling:
+\`\`\`
+<div className="rounded-2xl overflow-hidden border border-gray-200 shadow-sm">
+  <table className="w-full text-sm">
+    <thead className="bg-gray-50 border-b border-gray-200">
+      <tr>
+        <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Col</th>
+      </tr>
+    </thead>
+    <tbody className="bg-white divide-y divide-gray-100">
+      <tr className="hover:bg-gray-50 transition-colors duration-100">
+        <td className="px-4 py-3 text-gray-700">Value</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+\`\`\`
+Dark variant: \`bg-gray-900 border-gray-800\` header, \`bg-gray-950 divide-gray-800\` body, \`hover:bg-gray-900\` rows.
+
+### Step 10 — Status badges and tags
+  Success: \`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 ring-1 ring-green-600/20\`
+  Warning: \`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20\`
+  Error:   \`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 ring-1 ring-red-600/20\`
+  Info:    \`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 ring-1 ring-blue-600/20\`
+  Dark apps: use /10 backgrounds and brighter text (e.g. \`bg-green-400/10 text-green-400\`)
+
+### Step 11 — Loading and empty states
+Replace spinners with skeleton loaders where possible:
+  \`<div className="animate-pulse bg-gray-200 rounded-lg h-4 w-3/4" />\`
+
+Empty states (when a list/table has no data):
+\`\`\`
+<div className="flex flex-col items-center justify-center py-16 text-center">
+  <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+    {/* icon */}
+  </div>
+  <h3 className="text-base font-semibold text-gray-900 mb-1">No items yet</h3>
+  <p className="text-sm text-gray-500 max-w-sm">Descriptive message about what this section is for.</p>
+</div>
+\`\`\`
+
+### Step 12 — Icons (lucide-react — already WebContainer-compatible)
+Replace text labels, emoji, and font-awesome with lucide-react icons.
+lucide-react is pure ESM, works perfectly in WebContainers and Vite.
+Add to package.json: \`"lucide-react": "^0.469.0"\`
+
+Usage: \`import { Search, Plus, Trash2, ChevronRight } from 'lucide-react'\`
+Size classes: \`<Search className="w-4 h-4" />\` (inline) or \`w-5 h-5\` (buttons)
+Never use @heroicons, react-icons, or font-awesome — these add weight and some have WebContainer issues.
+
+### Step 13 — Scrollbar polish (global CSS)
+\`\`\`css
+* { scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.12) transparent; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+\`\`\`
 
 ### What NOT to do — identity-destroying patterns
 - Do NOT replace a light-themed app's white background with slate-950 dark gradients
 - Do NOT apply purple/indigo color scheme to an app that used blue, red, green, or orange
-- Do NOT add radial glow mesh backgrounds to a government portal or booking system
-- Do NOT apply backdrop-blur to every single card and panel — it makes the app unreadable
+- Do NOT add radial glow / mesh gradient backgrounds to government portals or booking systems
+- Do NOT apply backdrop-blur to every single card and panel — ruins readability
 - Do NOT restructure pages into bento grids if the original was a form or data table
-- Do NOT add "gradient hero headline" text to every page title
+- Do NOT add "gradient hero headline" text to every page title — only the primary brand heading
 - Do NOT change the navigation structure, order of pages, or information hierarchy
 - Do NOT use glass effects on form inputs — users need clear contrast to fill them in
+- Do NOT wrap everything in motion.div with heavy animations — keep animations subtle (opacity, scale 0.97–1)
+- Do NOT import framer-motion — it is too heavy for WebContainers; use Tailwind CSS transitions only
 
 ## Output Format
 Output EVERY file in this exact XML format. No exceptions.
