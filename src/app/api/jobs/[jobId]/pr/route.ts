@@ -2,7 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { getJob } from '@/lib/dynamodb'
 import { getAllGeneratedFiles } from '@/lib/s3'
-import { createOctokit, createPR } from '@/lib/github'
+import { createOctokit, createPR, GitHubPRCreationError } from '@/lib/github'
+
+type GitHubApiError = Error & {
+  status?: number
+  response?: {
+    data?: {
+      message?: string
+    }
+    headers?: {
+      'x-oauth-scopes'?: string
+      'x-accepted-oauth-scopes'?: string
+    }
+  }
+}
 
 export async function POST(
   _req: NextRequest,
@@ -26,14 +39,22 @@ export async function POST(
     )
   }
 
-  const clerk = clerkClient()
-
-  // Get GitHub OAuth token from Clerk
-  const tokenResponse = await clerk.users.getUserOauthAccessToken(
-    userId,
-    'oauth_github'
-  )
-  const githubToken = tokenResponse.data[0]?.token
+  let githubToken: string | undefined
+  try {
+    const clerk = await clerkClient()
+    const tokenResponse = await clerk.users.getUserOauthAccessToken(
+      userId,
+      'oauth_github'
+    )
+    githubToken = tokenResponse.data[0]?.token
+  } catch (error) {
+    console.error('Clerk OAuth Error:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return NextResponse.json(
+      { error: `Clerk OAuth Error: ${message}` },
+      { status: 500 }
+    )
+  }
 
   if (!githubToken) {
     return NextResponse.json(
@@ -54,13 +75,54 @@ export async function POST(
     )
   }
 
-  const prUrl = await createPR(
-    octokit,
-    job.repoOwner,
-    job.repoName,
-    job.jobId,
-    generatedFiles
-  )
+  try {
+    const prUrl = await createPR(
+      octokit,
+      job.repoOwner,
+      job.repoName,
+      job.jobId,
+      generatedFiles
+    )
 
-  return NextResponse.json({ prUrl })
+    return NextResponse.json({ prUrl })
+  } catch (error) {
+    if (error instanceof GitHubPRCreationError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.statusCode }
+      )
+    }
+
+    const githubError = error as GitHubApiError
+    const acceptedScopes = githubError.response?.headers?.['x-accepted-oauth-scopes'] ?? ''
+    const grantedScopes = githubError.response?.headers?.['x-oauth-scopes'] ?? ''
+    const missingRepoScope =
+      acceptedScopes.includes('repo') && !grantedScopes.includes('repo')
+
+    if (missingRepoScope) {
+      return NextResponse.json(
+        {
+          error:
+            'GitHub token is missing repo permission. Reconnect GitHub in Clerk with repo scope, then retry PR creation.',
+        },
+        { status: 403 }
+      )
+    }
+
+    if (githubError.status === 403 || githubError.status === 404) {
+      return NextResponse.json(
+        {
+          error:
+            'Unable to create PR due to GitHub repository access restrictions. Ensure this account can push or fork the repository and has repo scope.',
+        },
+        { status: 403 }
+      )
+    }
+
+    console.error('PR creation error:', error)
+    return NextResponse.json(
+      { error: 'Failed to create pull request' },
+      { status: 500 }
+    )
+  }
 }

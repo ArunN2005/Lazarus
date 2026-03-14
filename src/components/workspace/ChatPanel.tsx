@@ -36,7 +36,7 @@ export function ChatPanel() {
   const setFileComplete = useWorkspaceStore((s) => s.setFileComplete)
   const generatedFiles = useWorkspaceStore((s) => s.generatedFiles)
   const refreshPreview = useWorkspaceStore((s) => s.refreshPreview)
-  const { writeFile } = useWebContainer()
+  const { writeFile, runInstall } = useWebContainer()
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -84,11 +84,23 @@ export function ChatPanel() {
         addMessage(data.message)
 
         if (data.updatedFiles) {
+          let needsInstall = false
           for (const file of data.updatedFiles) {
             if (file.path && file.content) {
               setFileComplete(file.path, file.content)
               await writeFile(file.path, file.content)
+              if (file.path.endsWith('package.json')) needsInstall = true
             }
+          }
+          if (needsInstall) {
+            addMessage({
+              id: crypto.randomUUID(),
+              role: 'system',
+              content: 'package.json changed — re-running npm install...',
+              timestamp: new Date().toISOString(),
+            })
+            const currentFiles = useWorkspaceStore.getState().generatedFiles
+            void runInstall(currentFiles)
           }
         }
       }
@@ -166,7 +178,7 @@ export function ChatPanel() {
     } finally {
       setGeneratingImage(false)
     }
-  }, [imagePrompt, generatingImage, jobId, addMessage, writeFile, refreshPreview])
+  }, [imagePrompt, generatingImage, jobId, addMessage, writeFile, refreshPreview, getToken])
 
   const disabled = status === 'resurrecting'
 

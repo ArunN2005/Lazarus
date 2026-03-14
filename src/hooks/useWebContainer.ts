@@ -148,6 +148,74 @@ function cleanChunk(chunk: string): string {
     .trim()
 }
 
+// Global buffer to catch Vite errors split across stream chunks
+let viteErrorBuffer = ''
+
+/** Check for Vite missing dependency errors and auto-install them */
+function checkAndInstallMissingDeps(
+  chunk: string,
+  wc: WebContainer,
+  appRoot: string,
+  addLog: (msg: string) => void
+) {
+  // Append new chunk to buffer and keep the last 1000 characters
+  viteErrorBuffer += chunk
+  if (viteErrorBuffer.length > 1000) {
+    viteErrorBuffer = viteErrorBuffer.slice(-1000)
+  }
+
+  // e.g. [vite] Internal server error: Failed to resolve import "react-router-dom" from "src/main.tsx".
+  // e.g. [vite] Pre-transform error: Failed to resolve import "framer-motion" from "src/App.tsx".
+  const match = viteErrorBuffer.match(/Failed to resolve import "([^"]+)"/i) || 
+                viteErrorBuffer.match(/Cannot find package '([^']+)'/i) ||
+                viteErrorBuffer.match(/Missing:\s+([a-zA-Z0-9_/@-]+)/i) ||
+                viteErrorBuffer.match(/Error: Cannot find module '([^']+)'/i)
+
+  if (!match) return
+
+  // Clear buffer so we don't trigger multiple times for the exact same error log
+  viteErrorBuffer = ''
+
+  const originalImport = match[1]
+  // Extract core package name (handle scoped packages like @radix-ui/react-slot and paths like lucide-react/icons)
+  let pkgName = originalImport
+  if (pkgName.startsWith('@')) {
+    const parts = pkgName.split('/')
+    if (parts.length >= 2) pkgName = `${parts[0]}/${parts[1]}`
+  } else {
+    pkgName = pkgName.split('/')[0]
+  }
+
+  const win = window as unknown as Record<string, unknown>
+  win.__lz_installing = win.__lz_installing || new Set<string>()
+  const installingSet = win.__lz_installing as Set<string>
+  if (installingSet.has(pkgName)) return
+
+  installingSet.add(pkgName)
+  addLog(`> Auto-installing missing dependency: ${pkgName}...`)
+
+  wc.spawn('npm', ['install', pkgName], { cwd: appRoot }).then((proc) => {
+    proc.output.pipeTo(
+      new WritableStream({
+        write(c) {
+          const clean = cleanChunk(c)
+          if (clean) addLog(clean)
+        },
+      })
+    )
+    proc.exit.then((code) => {
+      if (code === 0) {
+        addLog(`> Successfully installed ${pkgName}`)
+      } else {
+        addLog(`> Failed to automatically install ${pkgName} (exit ${code})`)
+      }
+      setTimeout(() => installingSet.delete(pkgName), 5000)
+    })
+  }).catch(() => {
+    installingSet.delete(pkgName)
+  })
+}
+
 /**
  * Find the best package.json to run (the one with a dev/start script).
  * For repos with frontend/ and backend/, picks the frontend.
@@ -334,6 +402,7 @@ export function useWebContainer() {
             if (clean) {
               store.addTerminalLog(clean)
             }
+            checkAndInstallMissingDeps(chunk, wc, appRoot, store.addTerminalLog)
           },
         })
       )
@@ -439,7 +508,10 @@ export function useWebContainer() {
           new WritableStream({
             write(chunk) {
               const clean = stripAnsi(chunk)
-              if (clean.trim()) store.addTerminalLog(clean)
+              if (clean.trim()) {
+                store.addTerminalLog(clean)
+              }
+              checkAndInstallMissingDeps(chunk, wc, frontendRoot, store.addTerminalLog)
             },
           })
         )

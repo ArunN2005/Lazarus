@@ -15,14 +15,14 @@ export function EditorPanel() {
   const currentStreamingFile = useWorkspaceStore((s) => s.currentStreamingFile)
   const jobId = useWorkspaceStore((s) => s.jobId)
   const { getToken } = useAuth()
-  const { setEditor } = useStreamingEditor()
+  const { setEditor, setContent, setLanguage, getEditor } = useStreamingEditor()
   const [loading, setLoading] = useState(false)
   // Track files we've already tried to fetch (prevents infinite re-fetch on 404)
   const fetchedRef = useRef<Set<string>>(new Set())
+  // Track what file the editor is currently showing (to avoid unnecessary setValue calls)
+  const displayedFileRef = useRef<string | null>(null)
 
   // Fetch original file content from S3 when clicking a file that's not yet loaded.
-  // Deps are limited to activeFile/jobId only — reading Maps via getState() avoids
-  // this effect being cancelled by every streaming token that updates generatedFiles.
   useEffect(() => {
     if (!activeFile || !jobId) return
 
@@ -64,15 +64,39 @@ export function EditorPanel() {
     return () => {
       cancelled = true
     }
-  }, [activeFile, jobId])
+  }, [activeFile, jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Prefer generated content, fall back to original
-  const activeContent = activeFile
-    ? generatedFiles.get(activeFile) ?? originalFiles.get(activeFile) ?? ''
-    : ''
-  const isStreaming = activeFile === currentStreamingFile
+  // ── Imperative content update ───────────────────────────────────────────────
+  // When activeFile changes, or when generatedFiles/originalFiles update for the
+  // active file (e.g. chat edit completes), push the new content into Monaco.
+  // This replaces the old `key={activeFile}` approach which destroyed/recreated
+  // the entire editor on every file switch.
+  useEffect(() => {
+    if (!activeFile) return
 
-  const getLanguage = (filePath: string): string => {
+    // Don't overwrite content while a file is actively streaming tokens
+    const isStreaming = activeFile === currentStreamingFile
+    if (isStreaming) return
+
+    const content =
+      generatedFiles.get(activeFile) ?? originalFiles.get(activeFile) ?? ''
+
+    // Only update if the file actually changed
+    if (displayedFileRef.current === activeFile) {
+      const editor = getEditor()
+      if (editor && editor.getValue() === content) {
+        return
+      }
+    }
+
+    displayedFileRef.current = activeFile
+
+    // Set language first, then content
+    setLanguage(activeFile)
+    setContent(content)
+  }, [activeFile, generatedFiles, originalFiles, currentStreamingFile, setContent, setLanguage, getEditor])
+
+  const getLanguageForFile = (filePath: string): string => {
     const ext = filePath.split('.').pop() ?? ''
     const map: Record<string, string> = {
       ts: 'typescript',
@@ -97,11 +121,21 @@ export function EditorPanel() {
   const handleEditorMount = useCallback(
     (editor: monacoEditor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => {
       setEditor(editor, monaco)
+
+      // If there's already an active file when the editor mounts, set its content
+      const { activeFile: af, generatedFiles: gf, originalFiles: of } =
+        useWorkspaceStore.getState()
+      if (af) {
+        const content = gf.get(af) ?? of.get(af) ?? ''
+        editor.setValue(content)
+        displayedFileRef.current = af
+      }
     },
     [setEditor]
   )
 
   const breadcrumb = activeFile?.split('/') ?? []
+  const isStreaming = activeFile === currentStreamingFile
 
   if (!activeFile) {
     return (
@@ -116,6 +150,11 @@ export function EditorPanel() {
       </div>
     )
   }
+
+  // Initial value for the editor — only used on first mount
+  const activeContent = activeFile
+    ? generatedFiles.get(activeFile) ?? originalFiles.get(activeFile) ?? ''
+    : ''
 
   return (
     <div className="h-full flex flex-col bg-[#1e1e1e]">
@@ -144,11 +183,11 @@ export function EditorPanel() {
           </span>
         )}
         <span className="text-xs px-1.5 py-0.5 bg-bg-elevated border border-border-subtle rounded text-text-muted">
-          {getLanguage(activeFile)}
+          {getLanguageForFile(activeFile)}
         </span>
       </div>
 
-      {/* Monaco */}
+      {/* Monaco — NO key={activeFile} — we update imperatively */}
       <div className="flex-1 min-h-0 overflow-hidden relative">
         {loading && !activeContent ? (
           <div className="flex-1 flex items-center justify-center h-full">
@@ -156,10 +195,9 @@ export function EditorPanel() {
           </div>
         ) : (
           <Editor
-            key={activeFile}
             height="100%"
-            language={getLanguage(activeFile)}
-            value={activeContent}
+            language={getLanguageForFile(activeFile)}
+            defaultValue={activeContent}
             theme="vs-dark"
             onMount={handleEditorMount}
             options={{

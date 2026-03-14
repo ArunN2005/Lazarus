@@ -1,9 +1,6 @@
-import { NextResponse } from 'next/server'
+import { clerkMiddleware } from '@clerk/nextjs/server'
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function middleware() {
-  return NextResponse.next()
-}
+export default clerkMiddleware()
 
 export const config = {
   matcher: [

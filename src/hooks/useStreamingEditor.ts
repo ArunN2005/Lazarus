@@ -1,26 +1,31 @@
 'use client'
 
-import { useCallback, useRef } from 'react'
+import { useCallback } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 
-export function useStreamingEditor() {
-  const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null)
-  const monacoRef = useRef<typeof import('monaco-editor') | null>(null)
+// ── Module-level singleton refs ─────────────────────────────────────────────
+// Shared across ALL consumers (EditorPanel mount + useResurrection streaming).
+// This is the fix: previously each useStreamingEditor() call created its own
+// useRef, so the streaming hook in useResurrection never saw the editor instance
+// that EditorPanel mounted.
+let _editor: monacoEditor.IStandaloneCodeEditor | null = null
+let _monaco: typeof import('monaco-editor') | null = null
 
+export function useStreamingEditor() {
   const setEditor = useCallback(
     (
       editor: monacoEditor.IStandaloneCodeEditor,
       monaco: typeof import('monaco-editor')
     ) => {
-      editorRef.current = editor
-      monacoRef.current = monaco
+      _editor = editor
+      _monaco = monaco
     },
     []
   )
 
   const appendToken = useCallback((token: string) => {
-    const editor = editorRef.current
-    const monaco = monacoRef.current
+    const editor = _editor
+    const monaco = _monaco
     if (!editor || !monaco) return
 
     const model = editor.getModel()
@@ -44,20 +49,20 @@ export function useStreamingEditor() {
   }, [])
 
   const clearEditor = useCallback(() => {
-    const editor = editorRef.current
+    const editor = _editor
     if (!editor) return
     editor.setValue('')
   }, [])
 
   const setContent = useCallback((content: string) => {
-    const editor = editorRef.current
+    const editor = _editor
     if (!editor) return
     editor.setValue(content)
   }, [])
 
   const setLanguage = useCallback((filePath: string) => {
-    const editor = editorRef.current
-    const monaco = monacoRef.current
+    const editor = _editor
+    const monaco = _monaco
     if (!editor || !monaco) return
 
     const model = editor.getModel()
@@ -92,12 +97,15 @@ export function useStreamingEditor() {
     monaco.editor.setModelLanguage(model, language)
   }, [])
 
+  /** Get the current editor instance (for imperative updates outside streaming) */
+  const getEditor = useCallback(() => _editor, [])
+
   return {
     setEditor,
     appendToken,
     clearEditor,
     setContent,
     setLanguage,
-    editorRef,
+    getEditor,
   }
 }
