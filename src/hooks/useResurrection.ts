@@ -82,6 +82,10 @@ export function useResurrection() {
       case 'file_complete': {
         store.setFileComplete(data.file, data.content)
         completedFilesRef.current.set(data.file, data.content)
+        const incrementalTree = buildFileTreeFromPaths(
+          Array.from(completedFilesRef.current.keys())
+        )
+        store.setFileTree(incrementalTree)
         const writePromise = writeFileRef.current(data.file, data.content)
         pendingWritesRef.current.push(writePromise)
         break
