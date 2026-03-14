@@ -1,13 +1,15 @@
-import { NextResponse } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function middleware() {
-  return NextResponse.next()
-}
+// Protect everything inside /workspace
+const isProtectedRoute = createRouteMatcher(['/workspace(.*)'])
+
+export default clerkMiddleware((auth, req) => {
+  if (isProtectedRoute(req)) {
+    auth().protect()
+  }
+})
 
 export const config = {
-  matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    '/(api|trpc)(.*)',
-  ],
+  // Excludes Next.js internals, static files, and explicit image types completely
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 }
