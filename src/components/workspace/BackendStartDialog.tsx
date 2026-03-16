@@ -22,6 +22,7 @@ export function BackendStartDialog() {
   const backendFramework = useWorkspaceStore((s) => s.backendFramework)
   const generatedFiles = useWorkspaceStore((s) => s.generatedFiles)
   const setShowBackendDialog = useWorkspaceStore((s) => s.setShowBackendDialog)
+  const setBackendDialogHandled = useWorkspaceStore((s) => s.setBackendDialogHandled)
 
   const { runInstall, runBackendThenFrontend } = useWebContainer()
 
@@ -40,11 +41,13 @@ export function BackendStartDialog() {
   } catch { /* skip */ }
 
   const handleStartBoth = () => {
+    setBackendDialogHandled(true)
     setShowBackendDialog(false)
     runBackendThenFrontend(generatedFiles, backendRoot)
   }
 
   const handleFrontendOnly = () => {
+    setBackendDialogHandled(true)
     setShowBackendDialog(false)
     runInstall(generatedFiles)
   }

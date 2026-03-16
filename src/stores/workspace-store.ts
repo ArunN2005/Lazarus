@@ -33,6 +33,7 @@ interface WorkspaceStore {
   showBackendDialog: boolean
   backendRoot: string | null
   backendFramework: string | null
+  backendDialogHandled: boolean
   showMigrationPlanModal: boolean
   legacyScore: number
   weaknesses: string[]
@@ -66,6 +67,7 @@ interface WorkspaceStore {
   setEnvVarValue: (key: string, value: string) => void
   setShowBackendDialog: (show: boolean) => void
   setBackendInfo: (root: string, framework: string) => void
+  setBackendDialogHandled: (handled: boolean) => void
   setShowMigrationPlanModal: (show: boolean) => void
   setRepoAnalysis: (score: number, weaknesses: string[], description: string) => void
   setRepoInfo: (url: string, name: string) => void
@@ -98,6 +100,7 @@ const initialState = {
   showBackendDialog: false,
   backendRoot: null,
   backendFramework: null,
+  backendDialogHandled: false,
   showMigrationPlanModal: false,
   legacyScore: 0,
   weaknesses: [] as string[],
@@ -200,6 +203,8 @@ export const useWorkspaceStore = create<WorkspaceStore>((set) => ({
 
   setBackendInfo: (root, framework) =>
     set({ backendRoot: root, backendFramework: framework }),
+
+  setBackendDialogHandled: (handled) => set({ backendDialogHandled: handled }),
 
   setShowMigrationPlanModal: (show) => set({ showMigrationPlanModal: show }),
 

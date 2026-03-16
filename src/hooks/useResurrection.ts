@@ -69,6 +69,9 @@ export function useResurrection() {
   const handleEvent = useCallback((data: SSEEvent) => {
     switch (data.type) {
       case 'file_start':
+        if (completedFilesRef.current.has(data.file)) {
+          break
+        }
         store.setFileStreaming(data.file)
         clearEditorRef.current()
         setLanguageRef.current(data.file)
@@ -80,6 +83,9 @@ export function useResurrection() {
         break
 
       case 'file_complete': {
+        if (completedFilesRef.current.has(data.file)) {
+          break
+        }
         store.setFileComplete(data.file, data.content)
         completedFilesRef.current.set(data.file, data.content)
         const incrementalTree = buildFileTreeFromPaths(
@@ -157,7 +163,9 @@ export function useResurrection() {
           const backendInfo = analyzeBackend(completedFiles)
           if (backendInfo?.compatible) {
             store.setBackendInfo(backendInfo.root, backendInfo.framework)
-            store.setShowBackendDialog(true)
+            if (!useWorkspaceStore.getState().backendDialogHandled) {
+              store.setShowBackendDialog(true)
+            }
           } else {
             runInstallRef.current(completedFiles)
           }
@@ -185,6 +193,8 @@ export function useResurrection() {
     pendingWritesRef.current = []
     completedFilesRef.current = new Map()
     eventIndexRef.current = 0
+    store.setBackendDialogHandled(false)
+    store.setShowBackendDialog(false)
 
     const jobId = store.jobId
 

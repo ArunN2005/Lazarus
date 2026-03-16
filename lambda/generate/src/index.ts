@@ -253,14 +253,24 @@ export const handler = async (event: { jobId: string }): Promise<void> => {
     console.log(`[generate-lambda] Prompts loaded, starting Bedrock stream`)
 
     const completedFiles = new Map<string, string>()
+    const seenFiles = new Set<string>()
 
     const parser = parseFileStream(
       (filePath) => {
+        if (seenFiles.has(filePath)) {
+          console.log(`[generate-lambda] Duplicate file_start ignored: ${filePath}`)
+          return
+        }
         console.log(`[generate-lambda] Streaming: ${filePath}`)
         void pushStreamEvent(jobId, { type: 'file_start', file: filePath })
         void putFileRecord(jobId, filePath, null, 'streaming')
       },
       (filePath, content) => {
+        if (seenFiles.has(filePath)) {
+          console.log(`[generate-lambda] Duplicate file_complete ignored: ${filePath}`)
+          return
+        }
+        seenFiles.add(filePath)
         console.log(`[generate-lambda] Complete: ${filePath}`)
         completedFiles.set(filePath, content)
         void pushStreamEvent(jobId, { type: 'file_complete', file: filePath, content })
